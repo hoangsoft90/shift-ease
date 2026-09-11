@@ -1,6 +1,6 @@
 # Checklist — ShiftEase
 
-Cập nhật: 2026-09-11 (**CI-APK session: targetSdk 36 + cleartext + Sentry + icon mới; APK chỉ build trên GH Actions theo skill shiftease-ci-apk; privacy/monitoring docs đã re-audit cho Sentry; 315/315**; trước đó: P8 prep complete verified theo p8_fix1; P9 launch prep complete). Chi tiết: `doc/release/privacy.md` (Sentry audit), `.agents/skills/shiftease-ci-apk/` (quy trình CI, gitignored), `result_p9_launch.md`.
+Cập nhật: 2026-09-11 (**AdMob integration: test_ads=true + banner + UMP consent + production-placeholder auto-disable; privacy re-audit 2 network consumers; 328/328**; trước đó: P0 fix mobile DB path; CI-APK session targetSdk 36 + Sentry + icon; P8/P9 prep complete). Chi tiết: `result_admob_integration.md`, `lib/config/ads_config.dart`, `doc/release/privacy.md` (§ads — checklist trước khi live ads), `result_p0_db_path_mobile.md`.
 
 ## ✅ Đã làm (bằng chứng trên đĩa: result13_gate_m2.txt + result14_gate_a.txt + result15_gate_c.txt)
 

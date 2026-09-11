@@ -1,7 +1,7 @@
 # Project State — ShiftEase
 
 > Trạng thái project tại thời điểm cập nhật. File chính thức theo dõi phiên: `.project/working.md`.
-> Cập nhật: 2026-09-11 (**P0 fix mobile DB path** — `resolveDbPath` (core/db/db_path.dart): mobile = path_provider app-support, KHÔNG BAO GIỜ `HOME ?? '.'`; recovery UI phân loại filesystem/key/cipher; 322/322. Trước đó trong ngày: CI-APK session — targetSdk/compileSdk **36** (Play 31/8/2026), cleartext HTTP + INTERNET (Sentry duy nhất), Sentry (`sentry_flutter ^9.28`, error-only PII off), icon mới (Android adaptive + iOS), **APK chỉ build trên GH Actions** (skill `.agents/skills/shiftease-ci-apk`, repo github.com/hoangsoft90/shift-ease, CI xanh + APK 87MB artifact); trước nữa: P9 LAUNCH PREP COMPLETE, KHÔNG claim PRODUCTION LIVE).
+> Cập nhật: 2026-09-11 (**AdMob ads integration** — `google_mobile_ads ^9.1.0`, banner dưới app shell, UMP consent trước init, **`admob.test_ads: true`** = chỉ Google test IDs (tránh LIMIT), production placeholder ⇒ ads tự tắt; minSdk pin 24; privacy.md re-audit lần 3 (2 network consumers: Sentry + AdMob) — 328/328. Trước đó trong ngày: P0 fix mobile DB path (`resolveDbPath` app-support, recovery phân loại lỗi, 322/322); CI-APK session — targetSdk/compileSdk 36, cleartext HTTP + INTERNET, Sentry error-only, icon mới, APK chỉ build trên GH Actions (skill `shiftease-ci-apk`, CI xanh); trước nữa: P9 LAUNCH PREP COMPLETE, KHÔNG claim PRODUCTION LIVE).
 
 ## 1. Vị trí trên roadmap
 

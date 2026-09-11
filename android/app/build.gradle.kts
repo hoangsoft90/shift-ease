@@ -25,7 +25,10 @@ android {
         applicationId = "com.shiftease.shiftease"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // google_mobile_ads 9.x requires minSdk 24 (plugin build.gradle);
+        // pinned explicitly so a future flutter.minSdkVersion regression
+        // cannot break the manifest merge.
+        minSdk = 24
         // Play Store requirement from 2026-08-31 (see compileSdk note above).
         targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION

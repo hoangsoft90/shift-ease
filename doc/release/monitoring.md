@@ -1,13 +1,14 @@
 # P9.4/P9.5 — Production Monitoring Runbook + Feedback Triage (ShiftEase)
 
 > Nguồn: `phases/P9_production_launch.md` §4–§5 · `plan_p9.md` §P9.4/P9.5.
-> **Honesty (D-P9.6, cập nhật 2026-09-11):** app local-only; **Sentry crash reporting ĐÃ được user duyệt + tích hợp** (sentry_flutter ^9.28, error-only, PII off — xem `doc/release/privacy.md`). Monitoring = **Sentry dashboard (crash/error) + Play/App Store console + kênh user support + quy trình thủ công**. KHÔNG analytics/telemetry sử dụng ngoài Sentry — muốn thêm SDK khác → phải user duyệt riêng + re-audit `doc/release/privacy.md` trước (NEVER thêm lén).
+> **Honesty (D-P9.6, cập nhật 2026-09-11 lần 2 — AdMob):** app local-only; **Sentry crash reporting** (error-only, PII off) + **AdMob ads** (`google_mobile_ads` ^9.1.0, TEST mode `admob.test_ads=true`) đều user-approved — xem `doc/release/privacy.md`. Monitoring = **Sentry dashboard (crash/error) + AdMob console (sau khi có account thật: impressions/clicks/revenue + policy center) + Play/App Store console + kênh user support + quy trình thủ công**. KHÔNG analytics/telemetry ngoài 2 SDK đó — thêm SDK khác → user duyệt riêng + re-audit privacy (NEVER thêm lén).
 
 ## Part 1 — Monitoring signals (P9.4)
 
 Nguồn tín hiệu khả dụng thật:
 
 1. **Sentry dashboard** — crash/uncaught error theo version + OS, stack trace đầy đủ (error-only: PII off, traces off). Tích hợp 2026-09-11, DSN trong `lib/main.dart`. Tần suất check: mỗi ngày trong staged launch, mỗi tuần sau đó
+2. **AdMob console** — impressions/clicks/revenue theo ad unit, **policy center alerts** (invalid traffic, LIMIT status). Tích hợp 2026-09-11 (TEST mode — số liệu chỉ có ý nghĩa khi flip production + tạo account/unit thật). Alert cần hành động: ads LIMIT = dừng rollout + review traffic chất lượng
 2. **Play Console / App Store Connect** — crash rate, ANR, rating/review text, (nếu bật) Android vitals
 3. **Kênh support** (email/form/user group của closed cohort)
 4. **Kiểm tra thủ công định kỳ** — cài build production lên máy giữ làm "canary device", chạy smoke rút gọn sau mỗi stage rollout

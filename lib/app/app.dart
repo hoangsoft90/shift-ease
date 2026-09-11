@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:shiftease/domain/schedule_service.dart';
+import 'package:shiftease/features/ads/ad_banner_widget.dart';
 import 'package:shiftease/features/jobs/jobs_screen.dart';
 
 class ShiftEaseApp extends StatelessWidget {
@@ -24,7 +25,15 @@ class ShiftEaseApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      home: JobsScreen(service: service),
+      // Monetization banner (2026-09-11) pinned under the app shell;
+      // self-hiding when ads are disabled/unloaded — zero layout impact
+      // on the calendar itself (INVARIANT-008 untouched).
+      home: Column(
+        children: [
+          Expanded(child: JobsScreen(service: service)),
+          const AdBannerWidget(),
+        ],
+      ),
     );
   }
 }
