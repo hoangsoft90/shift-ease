@@ -6,6 +6,12 @@
 // as a real app the default resolves to $HOME/.shiftease/shiftease.db.
 // Widget tests construct ShiftEaseApp with an in-memory DB instead.
 //
+// 2026-09-11 — ONE deliberate exception to "nothing leaves the device":
+// Sentry crash reporting (sentry_flutter) sends uncaught error reports
+// (stack traces + error messages, NO database content, PII off) to sentry.io
+// so production failures become visible. This is the app's only network
+// consumer; doc/release/privacy.md audit basis was updated for it.
+//
 // P7.2/P7.3/P7.4 (production verification, P7_fix1.md): the production
 // database is ENCRYPTED with SQLCipher (pubspec build hook `source:
 // sqlcipher`). The master key is generated once, stored in platform secure
@@ -20,6 +26,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:sqlite3/sqlite3.dart' show Database;
 
 import 'package:shiftease/app/app.dart';
@@ -67,7 +74,19 @@ ScheduleService composeService(Database db, {String? encryptionKeyHex}) {
 
 void main() {
   initializeTimezoneDatabase(); // core/time — must run before any resolve
-  runApp(_Bootstrap());
+  // Sentry wraps the whole app so uncaught Flutter errors AND uncaught errors
+  // inside _Bootstrap's async open (key store, DB open) both get reported.
+  // appRunner defers runApp until SDK setup finishes; sendDefaultPii=false —
+  // no device identifiers attached. Error reporting only: tracing disabled.
+  SentryFlutter.init(
+    (options) {
+      options.dsn =
+          'https://4ba7f0242a15f45cbd863312820e4806@o4505474077753344.ingest.us.sentry.io/4512066544533504';
+      options.tracesSampleRate = 0;
+      options.sendDefaultPii = false;
+    },
+    appRunner: () => runApp(_Bootstrap()),
+  );
 }
 
 /// Root widget that resolves the encryption key and opens the encrypted

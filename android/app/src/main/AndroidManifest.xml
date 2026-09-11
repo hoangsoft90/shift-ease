@@ -5,10 +5,15 @@
          uses the inexact allow-while-idle mode (inexactAllowWhileIdle), which needs
          no special permission and is sufficient for a shift reminder. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 2026-09-11: Sentry crash reporting (sentry_flutter) — the ONLY network
+         consumer in the app. Everything else stays local/offline-first.
+         See doc/release/privacy.md (audit basis updated for this). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="ShiftEase"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

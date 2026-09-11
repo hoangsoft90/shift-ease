@@ -54,3 +54,6 @@ result*.txt
 # Environment / secrets
 .env
 .env.*
+
+# Agent-local skills/config (carry the GH token — never push)
+.agents/
