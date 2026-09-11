@@ -124,6 +124,15 @@ class _BootstrapState extends State<_Bootstrap> {
       );
       if (!mounted) return;
       setState(() => _service = composeService(db, encryptionKeyHex: key));
+      // App Open ad (2026-09-11): fire-and-forget AFTER the real app is
+      // composed — preload once SDK init (memoized initializeAds) completes,
+      // then show within the 15s cold-start window. The calendar is already
+      // interactive; the ad never gates startup (INVARIANT-008). Runs exactly
+      // once per process (initState), NOT in build() — rebuilds must not
+      // re-run the UMP consent flow. Google guidance: app-open on cold start.
+      initializeAds()
+          .then((_) => appOpenAds.load())
+          .then((_) => appOpenAds.showIfAvailable());
     } on SecretStoreException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -163,13 +172,6 @@ class _BootstrapState extends State<_Bootstrap> {
   Widget build(BuildContext context) {
     final service = _service;
     if (service != null) {
-      // App Open ad (2026-09-11): fire-and-forget AFTER the real app is up —
-      // preload once SDK init (run by AdBannerWidget's chain) completes, then
-      // show. The calendar is already interactive; the ad never gates startup
-      // (INVARIANT-008). Google guidance: app-open ads on cold start only.
-      initializeAds()
-          .then((_) => appOpenAds.load())
-          .then((_) => appOpenAds.showIfAvailable());
       return ShiftEaseApp(service: service);
     }
     if (_failureDetail != '') {

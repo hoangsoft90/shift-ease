@@ -82,6 +82,17 @@ lib/features/ads/ad_banner_widget.dart ← self-hiding banner, pin bottom app sh
 - (2 vòng fix analyze trong session: unused import/field, và signature
   `loadAndShowConsentFormIfRequired` cần listener ở 9.1.0.)
 
+## Code review của commit EN + ads (2026-09-11) — 2 lỗi thật, đã sửa
+
+| # | Lỗi | Fix |
+|---|---|---|
+| **M1** | **App Open Google test unit IDs SAI** trên cả 2 platform: Android `/3419835294`, iOS `/5662855259` — không có trong bảng demo ad units chính thức → App Open sẽ KHÔNG BAO GIỜ load, silently. Đối chiếu developers.google.com/admob/android/test-ads + /ios/test-ads | Android → `/9257395921`, iOS → `/5575463023` (đúng bảng). Banner/interstitial IDs đối chiếu lại: đúng sẵn |
+| **M2** | `initializeAds()` (UMP consent + SDK init) chạy trong `build()` của `_BootstrapState` — MỖI rebuild re-run consent flow; cộng thêm call trùng từ `AdBannerWidget.initState` | (a) `initializeAds` memoized (`_initializeAdsOnce ??=`) — consent + init chạy đúng 1 lần/process dù call từ đâu, bao nhiêu lần; (b) chuỗi App Open dời từ `build()` sang ngay sau `setState(_service=…)` trong `_openProductionDatabase()` — chạy 1 lần/cold start |
+| LOW | App Open ad có thể pop full-screen giữa chừng nếu load chậm hơn 15s hoặc user đã vào task | Guard `showWindow = 15s` từ construction service: ad quá hạn bị discard + preload lại cho lần sau (đúng guidance "cold start only") |
+| LOW | ads_config_test mutate `AppAdsConfig.testAds` static mà không restore | Hoạt động đúng nhờ thứ tự khai báo test (default-true test chạy trước) — đáng thêm `tearDown` restore khi chạm file lần tới |
+
+Verify sau fix: analyze sạch · **343/343** · test contract openApp vẫn khoá đúng (test mode → Google unit, flip → production Android ID, iOS rỗng).
+
 ## Còn lại (human, khi muốn kiếm tiền thật)
 
 1. ~~Tạo AdMob account → tạo app Android~~ ✅ **Đã tạo (2026-09-11):** App ID `ca-app-pub-6917313063209470~6379119743` + 4 units (banner/interstitial/open/rewarded) đã điền vào `ads_config.dart` + AndroidManifest.

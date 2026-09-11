@@ -51,8 +51,8 @@ const String kAdMobTestInterstitialAndroid =
 const String kAdMobTestInterstitialIos =
     'ca-app-pub-3940256099942544/4411468910';
 const String kAdMobTestOpenAppAndroid =
-    'ca-app-pub-3940256099942544/3419835294';
-const String kAdMobTestOpenAppIos = 'ca-app-pub-3940256099942544/5662855259';
+    'ca-app-pub-3940256099942544/9257395921';
+const String kAdMobTestOpenAppIos = 'ca-app-pub-3940256099942544/5575463023';
 
 /// Production AdMob IDs — **Android FILLED 2026-09-11** (app + banner +
 /// interstitial + open + rewarded). iOS app chưa tạo trên AdMob console →

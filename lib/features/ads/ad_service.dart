@@ -31,7 +31,14 @@ export 'package:shiftease/config/ads_config.dart'
 ///
 /// Never throws: any error is swallowed (and left for Sentry to report via
 /// the Flutter error zone) — ads are strictly additive to the app.
-Future<void> initializeAds() async {
+///
+/// Memoized: call sites (main.dart bootstrap, AdBannerWidget initState) may
+/// fire concurrently/repeatedly — the UMP consent flow + SDK init run EXACTLY
+/// once per process; everyone awaits the same promise.
+Future<void> initializeAds() => _initializeAdsOnce ??= _initializeAdsInner();
+Future<void>? _initializeAdsOnce;
+
+Future<void> _initializeAdsInner() async {
   if (!adsEnabled()) return;
   try {
     // 1. UMP consent (EEA/UK): update consent info, then show the form if
@@ -120,8 +127,13 @@ class BannerAdService {
 ///   • Any error is swallowed — ads never block or break the app
 ///     (INVARIANT-008). Sentry sees the error via the Flutter error zone.
 class AppOpenAdService {
+  AppOpenAdService() : _createdAt = DateTime.now();
   AppOpenAd? _ad;
   bool _isLoading = false;
+  final DateTime _createdAt;
+
+  /// How long after launch a loaded app-open ad may still be shown.
+  static const Duration showWindow = Duration(seconds: 15);
 
   /// True once an ad is preloaded and ready to show.
   bool get isReady => _ad != null;
@@ -155,9 +167,19 @@ class AppOpenAdService {
   /// Shows the preloaded ad (cold-start placement). Returns true when an ad
   /// was actually shown. Disposes after showing/failed-show and re-preloads
   /// for the next launch.
+  ///
+  /// UX/policy guard: the ad must be ready within [showWindow] of process
+  /// start — if the user is already deep in a task (import review, calendar
+  /// edit), popping a full-screen app-open ad mid-flow is against AdMob
+  /// guidance. In that case the ad is discarded and retried next launch.
   Future<bool> showIfAvailable() async {
     final ad = _ad;
     if (ad == null) return false;
+    if (DateTime.now().difference(_createdAt) > showWindow) {
+      ad.dispose();
+      _ad = null;
+      return false;
+    }
     _ad = null;
     ad.fullScreenContentCallback = FullScreenContentCallback<AppOpenAd>(
       onAdDismissedFullScreenContent: (ad) {
