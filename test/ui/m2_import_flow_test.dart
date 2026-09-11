@@ -308,17 +308,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('approved 1'), findsOneWidget);
       expect(
-          find.textContaining('Commit 1 approved row(s) — 2 ca pending sẽ '
-              'KHÔNG vào lịch'),
+          find.textContaining('Commit 1 approved row(s) — 2 pending shifts '
+              'will NOT enter the schedule'),
           findsOneWidget,
           reason: 'A5: the commit label names the skipped pending rows');
 
       // Cancel the dialog → nothing is committed.
       await tester.tap(find.textContaining('Commit 1 approved row(s)'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('sẽ KHÔNG được đưa vào lịch'), findsOneWidget,
+      expect(find.textContaining('are still pending review and will NOT'),
+          findsOneWidget,
           reason: 'A5: confirm dialog names the consequence before commit');
-      await tester.tap(find.text('Duyệt tiếp'));
+      await tester.tap(find.text('Keep reviewing'));
       await tester.pumpAndSettle();
       expect(db.select('SELECT COUNT(*) c FROM occurrences').first['c'], 0,
           reason: 'cancelling the warning must not commit anything');
@@ -326,7 +327,7 @@ void main() {
       // Confirm → only the 1 approved row lands on the schedule.
       await tester.tap(find.textContaining('Commit 1 approved row(s)'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Commit các ca đã duyệt'));
+      await tester.tap(find.text('Commit approved shifts'));
       await tester.pumpAndSettle();
       expect(find.text('Committed 1 shift(s) + 0 OFF day(s).'), findsOneWidget);
       final rendered = service.renderJob(

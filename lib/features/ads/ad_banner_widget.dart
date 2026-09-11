@@ -18,6 +18,12 @@ import 'package:shiftease/features/ads/ad_service.dart';
 /// instance per app; re-creating per build would leak ad objects).
 final BannerAdService adService = BannerAdService();
 
+/// App-owned App Open ad singleton (shown on cold start — main.dart).
+final AppOpenAdService appOpenAds = AppOpenAdService();
+
+/// App-owned interstitial singleton (shown after successful roster commits).
+final InterstitialAdService interstitialAds = InterstitialAdService();
+
 /// Whether ads are enabled on the current platform/build (test hook: pass
 /// [android] to force a branch in widget tests).
 bool adsEnabledForPlatform({bool? android}) => adsEnabled(android: android);

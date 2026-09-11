@@ -193,7 +193,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
   }
 
   /// RC plan §B3 — per-job income estimate card. Every amount ships with the
-  /// disclaimer (D-C6: 'Ước tính — không phải bảng lương chính thức'); when
+  /// disclaimer (D-C6: 'Estimate — not an official payroll figure'); when
   /// the config cannot price the week (no rule / multi-version) the card shows
   /// the reason instead of a guessed number. Tapping the card opens the full
   /// income breakdown screen (B3).
@@ -261,7 +261,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
               Text(job.name,
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              Text(est.unavailableReason ?? 'Không tính được.',
+              Text(est.unavailableReason ?? 'Unable to calculate.',
                   style: const TextStyle(color: Colors.blueGrey)),
               const SizedBox(height: 4),
               Text(WeekIncomeEstimate.disclaimer,

@@ -58,7 +58,7 @@ class WeekIncomeEstimate {
 
   /// Display label shipped with every amount (D-C6).
   static const String disclaimer =
-      'Ước tính — không phải bảng lương chính thức';
+      'Estimate — not an official payroll figure';
 
   const WeekIncomeEstimate({
     required this.available,
@@ -144,7 +144,7 @@ WeekIncomeEstimate estimateJobIncome({
     final rule = activeRuleFor(jobId, o.shiftDate);
     if (rule == null) {
       return WeekIncomeEstimate.unavailable(
-          'Chưa có Pay Rule hiệu lực cho ${o.shiftDate} — không đoán số.\n'
+          'No active pay rule for ${o.shiftDate} — guessing is not allowed.\n'
           '(Unable to calculate accurately: no active pay rule on '
           '${o.shiftDate}.)');
     }
@@ -161,16 +161,17 @@ WeekIncomeEstimate estimateJobIncome({
         .toList();
     if (wrs.length > 1) {
       return WeekIncomeEstimate.unavailable(
-          'Nhiều chế độ OT theo tuần — chọn 1.\n(Unable to calculate '
+          'Multiple weekly overtime schemes — pick one.\n(Unable to calculate '
           'accurately: multiple weekly overtime schemes.)');
     }
     if (wrs.isNotEmpty) weekScheme[rule.id] = (rule: rule, ot: wrs.single);
   }
   if (distinctRuleIds.length > 1 && weekScheme.isNotEmpty) {
     return WeekIncomeEstimate.unavailable(
-        'Tuần này nằm trên nhiều phiên bản Pay Rule và có OT theo tuần — '
-        'không gộp chính xác.\n(Unable to calculate accurately: weekly '
-        'overtime cannot be determined across multiple pay-rule versions.)');
+        'This week spans multiple pay-rule versions with a weekly overtime '
+        'scheme — totals cannot be split accurately.\n(Unable to calculate '
+        'accurately: weekly overtime cannot be determined across multiple '
+        'pay-rule versions.)');
   }
   final weekSchemeRule =
       weekScheme.isEmpty ? null : weekScheme.values.single;

@@ -37,6 +37,7 @@ import 'package:shiftease/core/import/import_validation.dart';
 import 'package:shiftease/domain/income_estimate.dart' show IncomeImpact;
 import 'package:shiftease/domain/schedule_service.dart';
 import 'package:shiftease/features/calendar/week_calendar_screen.dart';
+import 'package:shiftease/features/ads/ad_banner_widget.dart' show interstitialAds;
 import 'package:shiftease/features/common/write_guard.dart';
 
 /// Which input surface the current (pre-parse) import uses. The review/commit
@@ -514,9 +515,9 @@ class _ImportScreenState extends State<ImportScreen> {
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Text(
-              '${_pendingCount(s)} ca pending sẽ KHÔNG vào lịch '
-              'nếu bạn commit ngay. Bạn có muốn duyệt thêm hay '
-              'commit chỉ các ca đã duyệt?',
+              '${_pendingCount(s)} pending shifts will NOT enter the '
+              'schedule if you commit now. Keep reviewing, or commit '
+              'only the approved shifts?',
               style: const TextStyle(fontSize: 12)),
         ),
       ),
@@ -850,16 +851,16 @@ class _ImportScreenState extends State<ImportScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Commit now?'),
-          content: Text('$pending ca vẫn đang chờ duyệt (pending) sẽ KHÔNG '
-              'được đưa vào lịch nếu bạn commit ngay. Bạn có muốn duyệt tiếp '
-              'hay commit chỉ các ca đã duyệt?'),
+          content: Text('$pending shifts are still pending review and will '
+              'NOT enter the schedule if you commit now. Keep reviewing, or '
+              'commit only the approved shifts?'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Duyệt tiếp')),
+                child: const Text('Keep reviewing')),
             FilledButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Commit các ca đã duyệt')),
+                child: const Text('Commit approved shifts')),
           ],
         ),
       );
@@ -883,6 +884,14 @@ class _ImportScreenState extends State<ImportScreen> {
       _session = result.session;
       _error = result.error?.message;
     });
+    // Interstitial placement (2026-09-11): ONLY after a successful roster
+    // commit — a natural completion point, never mid-flow. Frequency-capped
+    // inside the service (1 per 3 commits, ≥60s apart); a no-op when ads
+    // are disabled or nothing is preloaded. Fire-and-forget: the result UI
+    // renders regardless of ad state (INVARIANT-008).
+    if (result.error == null) {
+      interstitialAds.maybeShowAfterCommit();
+    }
   }
 
   void _restart() {
@@ -930,7 +939,7 @@ class _ImportScreenState extends State<ImportScreen> {
       // Partial-commit có chủ đích (Gate A §A5): commit chỉ N ca đã duyệt;
       // số pending còn lại hiện ngay trên nút + dialog xác nhận khi bấm.
       return 'Commit $approved approved row(s) — '
-          '$pending ca pending sẽ KHÔNG vào lịch';
+          '$pending pending shifts will NOT enter the schedule';
     }
     return 'Commit $approved approved row(s)';
   }

@@ -21,6 +21,7 @@ import 'package:shiftease/core/db/schedule_repository.dart';
 import 'package:shiftease/core/money/money_types.dart';
 import 'package:shiftease/core/pattern/pattern_types.dart';
 import 'package:shiftease/core/time/time_engine.dart' show initializeTimezoneDatabase;
+import 'package:shiftease/domain/income_estimate.dart';
 import 'package:shiftease/domain/schedule_service.dart';
 import 'package:shiftease/features/income/income_breakdown_screen.dart';
 import 'package:shiftease/features/today/today_screen.dart';
@@ -114,7 +115,7 @@ void main() {
     // Regular Pay AND Estimated Total both read $1680 (no diff/OT here).
     expect(find.text('USD \$1680.00'), findsNWidgets(2));
     expect(find.text('Estimated Total'), findsOneWidget);
-    expect(find.textContaining('Ước tính'), findsOneWidget,
+    expect(find.textContaining(WeekIncomeEstimate.disclaimer), findsOneWidget,
         reason: 'D-C6: every amount ships with the estimate disclaimer');
     db.close();
 
@@ -127,7 +128,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('Unable to calculate accurately'), findsOneWidget);
-    expect(find.textContaining('không đoán số'), findsOneWidget);
+    expect(find.textContaining('guessing is not allowed'), findsOneWidget);
     expect(find.textContaining('USD \$0.00'), findsNothing,
         reason: 'missing config is never displayed as a \$0 estimate');
     db2.close();

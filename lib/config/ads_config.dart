@@ -50,6 +50,9 @@ const String kAdMobTestInterstitialAndroid =
     'ca-app-pub-3940256099942544/1033173712';
 const String kAdMobTestInterstitialIos =
     'ca-app-pub-3940256099942544/4411468910';
+const String kAdMobTestOpenAppAndroid =
+    'ca-app-pub-3940256099942544/3419835294';
+const String kAdMobTestOpenAppIos = 'ca-app-pub-3940256099942544/5662855259';
 
 /// Production AdMob IDs — **Android FILLED 2026-09-11** (app + banner +
 /// interstitial + open + rewarded). iOS app chưa tạo trên AdMob console →
@@ -86,15 +89,16 @@ class AdUnitIds {
           prodA: kAdMobAndroidInterstitialUnitProduction,
           prodI: kAdMobIosInterstitialUnitProduction);
 
-  /// App Open ad unit — production Android ID đã điền, nhưng app CHƯA hiển
-  /// thị format này (chưa có placement) → test mode trả '' (nothing requests
-  /// it). Khi implement format, thêm Google test ID tương ứng vào nhánh test.
+  /// App Open ad unit — SHOWN on every cold start (AppOpenAdService in
+  /// main.dart) once the SDK is initialized. iOS: no production app yet →
+  /// '' (self-disabling) in production; test mode uses Google's test unit.
   static String openApp({bool? android}) =>
-      _pick(android: android, testA: '', testI: '',
+      _pick(android: android, testA: kAdMobTestOpenAppAndroid,
+          testI: kAdMobTestOpenAppIos,
           prodA: kAdMobAndroidOpenAppUnitProduction, prodI: '');
 
   /// Rewarded ad unit — production Android ID đã điền, format CHƯA hiển thị
-  /// (như openApp: test mode trả '' cho tới khi implement + có test ID).
+  /// (no placement yet → test mode returns '' so nothing requests it).
   static String rewarded({bool? android}) =>
       _pick(android: android, testA: '', testI: '',
           prodA: kAdMobAndroidRewardedUnitProduction, prodI: '');

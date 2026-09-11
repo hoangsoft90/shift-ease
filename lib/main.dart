@@ -42,6 +42,9 @@ import 'package:shiftease/core/db/schedule_repository.dart';
 import 'package:shiftease/core/time/time_engine.dart';
 import 'package:shiftease/domain/schedule_service.dart';
 import 'package:shiftease/features/security/secure_secret_store.dart';
+import 'package:shiftease/features/ads/ad_banner_widget.dart'
+    show appOpenAds;
+import 'package:shiftease/features/ads/ad_service.dart';
 
 /// Production composition (Gate A §A1): all repositories share ONE database
 /// connection so a transaction genuinely spans them — the import commit is
@@ -160,6 +163,13 @@ class _BootstrapState extends State<_Bootstrap> {
   Widget build(BuildContext context) {
     final service = _service;
     if (service != null) {
+      // App Open ad (2026-09-11): fire-and-forget AFTER the real app is up —
+      // preload once SDK init (run by AdBannerWidget's chain) completes, then
+      // show. The calendar is already interactive; the ad never gates startup
+      // (INVARIANT-008). Google guidance: app-open ads on cold start only.
+      initializeAds()
+          .then((_) => appOpenAds.load())
+          .then((_) => appOpenAds.showIfAvailable());
       return ShiftEaseApp(service: service);
     }
     if (_failureDetail != '') {

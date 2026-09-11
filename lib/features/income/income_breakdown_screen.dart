@@ -154,7 +154,7 @@ class _IncomeBreakdownScreenState extends State<IncomeBreakdownScreen> {
                                 color: Colors.orange,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
-                        Text(est.unavailableReason ?? 'Không tính được.',
+                        Text(est.unavailableReason ?? 'Unable to calculate.',
                             style: const TextStyle(color: Colors.blueGrey)),
                       ],
                     ),

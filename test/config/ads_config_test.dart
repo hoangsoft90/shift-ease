@@ -32,6 +32,14 @@ void main() {
       expect(adsEnabled(android: true), isTrue);
       expect(adsEnabled(android: false), isTrue);
     });
+
+    test('test mode: interstitial + appOpen resolve to Google test units too',
+        () {
+      AppAdsConfig.testAds = true;
+      expect(AdUnitIds.openApp(android: true), kAdMobTestOpenAppAndroid);
+      expect(AdUnitIds.openApp(android: false), kAdMobTestOpenAppIos);
+      expect(AdUnitIds.openApp(android: true), isNotEmpty);
+    });
   });
 
   group('AdUnitIds — production mode (test_ads=false)', () {
@@ -107,13 +115,21 @@ void main() {
           kAdMobTestInterstitialAndroid);
     });
 
-    test('openApp/rewarded: production IDs resolve only when flag flips; '
-        'test mode returns empty (formats not rendered yet)', () {
-      expect(AdUnitIds.openApp(android: true), '');
-      expect(AdUnitIds.rewarded(android: true), '');
+    test('openApp: SHOWN on cold start — test mode uses the Google test '
+        'unit; production resolves to the real Android ID (iOS empty)', () {
+      expect(AdUnitIds.openApp(android: true), kAdMobTestOpenAppAndroid);
+      expect(AdUnitIds.openApp(android: false), kAdMobTestOpenAppIos);
       AppAdsConfig.testAds = false;
       expect(AdUnitIds.openApp(android: true),
           'ca-app-pub-6917313063209470/8158115597');
+      expect(AdUnitIds.openApp(android: false), '',
+          reason: 'no iOS production app yet → self-disabling');
+    });
+
+    test('rewarded: no placement yet — test mode returns empty; production '
+        'ID resolves when flag flips', () {
+      expect(AdUnitIds.rewarded(android: true), '');
+      AppAdsConfig.testAds = false;
       expect(AdUnitIds.rewarded(android: true),
           'ca-app-pub-6917313063209470/3866305343');
     });

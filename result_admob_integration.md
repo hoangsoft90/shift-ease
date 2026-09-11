@@ -78,14 +78,15 @@ lib/features/ads/ad_banner_widget.dart ← self-hiding banner, pin bottom app sh
   verified trực tiếp trong pub cache: `requestConsentInfoUpdate`,
   `loadAndShowConsentFormIfRequired(listener)`, `RequestConfiguration.testDeviceIds`).
 - `flutter analyze --no-pub --fatal-infos` → **No issues found!**
-- `flutter test test/` → **328/328 All tests passed!** (322 + 6)
+- `flutter test test/` → **343/343 All tests passed!** (after EN-language pass + App Open/Interstitial wiring)
 - (2 vòng fix analyze trong session: unused import/field, và signature
   `loadAndShowConsentFormIfRequired` cần listener ở 9.1.0.)
 
 ## Còn lại (human, khi muốn kiếm tiền thật)
 
-1. ~~Tạo AdMob account → tạo app Android~~ ✅ **Đã tạo (2026-09-11):** App ID `ca-app-pub-6917313063209470~6379119743` + 4 units (banner/interstitial/open/rewarded) đã điền vào `ads_config.dart` + AndroidManifest. App Open + Rewarded đã có ID nhưng **chưa có placement trong UI** (getter sẵn, test mode trả rỗng).
-2. **iOS CHƯA có**: tạo app iOS trên AdMob console → điền `kAdMobIosAppIdProduction` + units + thay GADApplicationIdentifier trong Info.plist (hiện sample).
-3. Khai báo Play Data safety (Advertising ID collected/shared) + App Store App Privacy; re-audit privacy.md.
-4. Flip `admob.test_ads: false` (pubspec + mirror `AppAdsConfig.testAds` trong `ads_config.dart`) → push → CI build → test trên device thật: banner/interstitial thật của app, không LIMIT.
-5. (Tuỳ chọn) Gắn device test ID từ logcat vào RequestConfiguration để preview ads thật trên máy dev.
+1. ~~Tạo AdMob account → tạo app Android~~ ✅ **Đã tạo (2026-09-11):** App ID `ca-app-pub-6917313063209470~6379119743` + 4 units (banner/interstitial/open/rewarded) đã điền vào `ads_config.dart` + AndroidManifest.
+2. ~~App Open + Interstitial chưa có placement~~ ✅ **Đã wire (2026-09-11, sau này):** `AppOpenAdService` hiển thị khi cold start (main.dart, sau MobileAds init + consent); `InterstitialAdService.maybeShowAfterCommit()` gọi sau khi import commit thành công (import_screen.dart) — cả hai dùng test IDs khi `test_ads=true`. **Rewarded vẫn chưa có placement UI** (getter sẵn).
+3. **iOS CHƯA có**: tạo app iOS trên AdMob console → điền `kAdMobIosAppIdProduction` + units + thay GADApplicationIdentifier trong Info.plist (hiện sample).
+4. Khai báo Play Data safety (Advertising ID collected/shared) + App Store App Privacy; re-audit privacy.md.
+5. Flip `admob.test_ads: false` (pubspec + mirror `AppAdsConfig.testAds` trong `ads_config.dart`) → push → CI build → test trên device thật: banner/interstitial/app-open thật của app, không LIMIT.
+6. (Tuỳ chọn) Gắn device test ID từ logcat vào RequestConfiguration để preview ads thật trên máy dev.

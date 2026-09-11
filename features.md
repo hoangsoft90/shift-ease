@@ -13,7 +13,7 @@
 | Định vị | **Personal Operating System for Shift Workers** — 3 trụ cột: Work – Life – Money |
 | Target persona | Nurse/Healthcare 25–45, Mỹ/Anh/Đức, ca xoay 3 kíp, đa nguồn thu nhập, có gia đình |
 | 3 trục differentiation | (1) Nhập liệu nhanh, (2) Correctness Contract (tính đúng), (3) UX đơn giản |
-| Monetization | **AdMob banner** đã tích hợp (`test_ads=true` — chỉ Google test ads, chưa live) + kế hoạch Free/Pro Lifetime $39.99 (chưa implement) |
+| Monetization | **AdMob banner + interstitial + app open** đã tích hợp (`test_ads=true` — chỉ Google test ads, chưa live) + kế hoạch Free/Pro Lifetime $39.99 (chưa implement) |
 | Platform | Android (targetSdk 36, minSdk 24) + iOS; offline-first, local-only |
 | Trạng thái build | RC 1.0.0+1 · CI 2 workflows (ShiftEase CI 8 jobs + Build Debug APK) · github.com/hoangsoft90/shift-ease |
 
@@ -113,7 +113,7 @@
 | G1 | Shift reminder | Local notification trước ca (default lead 60 phút, cấu hình được); skip ca đã trong lead window; 1 notification id fixed → reschedule thay thế; auto-reschedule khi app resume; Android 13+ xin `POST_NOTIFICATIONS` runtime; inexact allow-while-idle (không cần quyền special) |
 | G2 | ICS export | Per-job từ job screen; VEVENT chuẩn (UID + SUMMARY), file JSON/ICS nằm app-support dir (không UI share — ghi rõ trong privacy) |
 | G3 | Sentry crash reporting | `sentry_flutter ^9.28`, DSN config, **error-only: PII off, traces off**; wrap toàn app (cả lỗi async trong bootstrap) |
-| G4 | AdMob banner | `google_mobile_ads ^9.1.0`; banner pin dưới app shell (mọi màn), self-hiding khi disable/chưa load; **UMP consent trước init** (EEA/UK); mọi ad call guard — ads không bao giờ làm app lỗi; **`admob.test_ads: true`** = chỉ Google test unit IDs (tránh LIMIT); production placeholder ⇒ ads tự tắt (không fallback test ID) |
+| G4 | AdMob (banner + interstitial + app open) | `google_mobile_ads ^9.1.0`; banner pin đáy app shell (mọi màn), self-hiding khi disable/chưa load; **App Open** hiện khi cold start (sau MobileAds init + consent); **Interstitial** hiện sau import commit thành công; Rewarded chưa có placement; **UMP consent trước init** (EEA/UK); mọi ad call guard — ads không bao giờ làm app lỗi; **`admob.test_ads: true`** = chỉ Google test unit IDs (tránh LIMIT); production placeholder ⇒ format đó tự tắt (không fallback test ID) |
 | G5 | App icon | Custom icon (tool/make_icon.py): Android mọi density + adaptive (bg `#1E3A5F`) + full iOS AppIcon set |
 | G6 | Cleartext HTTP | `usesCleartextTraffic=true` + `INTERNET` (yêu cầu tường minh của owner; consumer: Sentry + AdMob) |
 
@@ -148,7 +148,8 @@
 | **DST dialog** | `features/common/dst_resolution_dialog.dart` | Giờ không tồn tại/bị lặp: giải thích + chọn candidate (không auto-guess) |
 | **Settings** | `features/settings/settings_screen.dart` | Rows: Schema version · Timezone · Permission status (notifications) · Backup (Full-data JSON) · Restore (Choose file → "Restore this backup?") · ICS export (ghi chú per job) · Delete all data (2 confirm) · Encryption status ("Encrypted (key verified)." hoặc lý do) · Data collection · About "ShiftEase — Offline shift calendar — release candidate" · Privacy Policy · Terms |
 | **Recovery screen** | `lib/main.dart` `_LockedApp` | Khi mở DB thất bại — tiêu đề theo loại lỗi ("storage problem"/"locked"/"unexpected error"), summary + guidance riêng từng loại, technical detail; KHÔNG claim mất data |
-| **Ad banner** | `features/ads/ad_banner_widget.dart` | Banner 50dp pin đáy app shell (mọi màn); ẩn khi test-off/chưa load/fail |
+| **Ad banner** | `features/ads/ad_banner_widget.dart` | Banner 50dp pin đáy app shell (mọi màn); ẩn khi test-off/chưa load/fail; đồng thời export singletons `appOpenAds`/`interstitialAds` |
+| **App Open / Interstitial** | `features/ads/ad_service.dart` | App Open: cold start; Interstitial: sau import commit; cả 2 không chặn luồng chính khi fail |
 
 Điều hướng: plain `Navigator.push` (không lib điều hướng); injection qua constructor (không service locator). Danh sách này khớp "Danh mục màn hình" spec plan1 — khác duy nhất: **Availability Finder / Sharing screens** chưa implement (backlog §5).
 
@@ -190,7 +191,7 @@
 | Import mở rộng | Pattern auto-detection | P1/P2 spec |
 | Sự kiện ngoài ca | TimeOff / PersonalEvent / AvailabilityBlock / Availability Finder | Spec F1–F5; chưa code |
 | Sharing | Granular sharing (FULL/BUSY_ONLY/RECOVERY), share link, partner overlay, webcal | Spec G1–G7; chưa code (offline-first hiện tại) |
-| Monetization | Live AdMob (production IDs) — đang `test_ads=true` | Checklist trong `doc/release/privacy.md` §ads; IAP/Pro Lifetime $39.99 chưa code |
+| Monetization | Live AdMob (production IDs, cả 3 format) — đang `test_ads=true` | Checklist trong `doc/release/privacy.md` §ads; IAP/Pro Lifetime $39.99 chưa code |
 | Cloud | Cloud backup E2E / account | Chưa code (local-only) |
 | Platform | Home-screen widgets; UI share/file-picker cho backup & ICS; localization (hiện UI tiếng Anh) | Chưa code |
 | Release ops | Signed AAB/App Store submission, closed testing | Human legs — BLOCKED theo `result_p9_launch.md` |

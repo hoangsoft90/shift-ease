@@ -161,7 +161,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final active =
         widget.service.activePayRule(jobId: jobId, date: todayIso);
     final ruleText = active == null
-        ? 'Chưa có Pay Rule — chưa thể ước tính thu nhập.'
+        ? 'No pay rule yet — income cannot be estimated.'
         : 'Active from ${active.effectiveFrom}: '
             '\$${active.baseHourlyRate.toStringAsFixed(2)}/h'
             '${active.differentials.isNotEmpty ? ' · ' + active.differentials.map((d) => '${d.type.name} +${d.value.toStringAsFixed(0)}%').join(', ') : ''}'

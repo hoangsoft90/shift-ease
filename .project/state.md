@@ -1,7 +1,7 @@
 # Project State — ShiftEase
 
 > Trạng thái project tại thời điểm cập nhật. File chính thức theo dõi phiên: `.project/working.md`.
-> Cập nhật: 2026-09-11 (**PayRule versioning UX** theo plan_payrule_version_ux — `savePayRuleFromEditor` (domain, Option B) + `closePayRuleVersion` (repo, null→date 1 lần, ownsTransaction), editor save tự mint version mới/close cũ trong 1 txn, copy sạch không A6; 340/340. Trước đó: AdMob production Android IDs điền (vẫn test_ads=true, 332/332), AdMob integration (banner + UMP), P0 fix mobile DB path, CI-APK session (targetSdk 36, Sentry, icon), P8/P9 prep complete — KHÔNG claim PRODUCTION LIVE).
+> Cập nhật: 2026-09-11 (**EN-language pass** — toàn bộ UI text user-facing chuẩn tiếng Anh, tests cập nhật theo; **AdMob App Open + Interstitial wired**: App Open cold start, Interstitial sau import commit, Rewarded chưa có placement; analyze sạch, 343/343. Trước đó: PayRule versioning UX (340/340), AdMob production Android IDs (test_ads=true), AdMob banner + UMP, P0 fix mobile DB path, CI-APK session (targetSdk 36, Sentry, icon), P8/P9 prep complete — KHÔNG claim PRODUCTION LIVE).
 
 ## 1. Vị trí trên roadmap
 

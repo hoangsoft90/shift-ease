@@ -150,7 +150,7 @@ void main() {
     await tester.fling(
         find.byType(ListView).first, const Offset(0, -1400), 3000);
     await tester.pumpAndSettle();
-    expect(find.textContaining('không đoán số'), findsOneWidget);
+    expect(find.textContaining('guessing is not allowed'), findsOneWidget);
     expect(find.textContaining('Regular Pay'), findsNothing);
   });
 }

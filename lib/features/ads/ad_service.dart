@@ -25,7 +25,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'package:shiftease/config/ads_config.dart';
 export 'package:shiftease/config/ads_config.dart'
-    show adsEnabled; // single import site for feature code
+    show adsEnabled, AdUnitIds; // single import site for feature code
 
 /// Runs the UMP consent flow, then initializes the Mobile Ads SDK.
 ///
@@ -106,5 +106,170 @@ class BannerAdService {
     _banner?.dispose();
     _banner = null;
     _loaded = false;
+  }
+}
+
+/// Owns the lifecycle of the app's single preloaded App Open ad (2026-09-11).
+///
+/// Policy:
+///   • load() right after SDK init (called from main.dart's bootstrap chain).
+///   • showIfAvailable() fires on every cold start (and warm reshares where
+///     the OS gives a backgrounded-app event — cold start only here).
+///   • After showing (or failing to show), a fresh ad is preloaded so the
+///     NEXT launch always has one ready (Google's recommended pattern).
+///   • Any error is swallowed — ads never block or break the app
+///     (INVARIANT-008). Sentry sees the error via the Flutter error zone.
+class AppOpenAdService {
+  AppOpenAd? _ad;
+  bool _isLoading = false;
+
+  /// True once an ad is preloaded and ready to show.
+  bool get isReady => _ad != null;
+
+  /// Preloads an app-open ad if ads are enabled and none is pending/ready.
+  Future<void> load() async {
+    if (_ad != null || _isLoading || !adsEnabled()) return;
+    final unit = AdUnitIds.openApp();
+    if (unit.isEmpty) return;
+    _isLoading = true;
+    try {
+      await AppOpenAd.load(
+        adUnitId: unit,
+        request: const AdRequest(),
+        adLoadCallback: AppOpenAdLoadCallback(
+          onAdLoaded: (ad) {
+            _ad = ad;
+            _isLoading = false;
+          },
+          onAdFailedToLoad: (error) {
+            // No retry storm: the next cold start retries.
+            _isLoading = false;
+          },
+        ),
+      );
+    } catch (_) {
+      _isLoading = false;
+    }
+  }
+
+  /// Shows the preloaded ad (cold-start placement). Returns true when an ad
+  /// was actually shown. Disposes after showing/failed-show and re-preloads
+  /// for the next launch.
+  Future<bool> showIfAvailable() async {
+    final ad = _ad;
+    if (ad == null) return false;
+    _ad = null;
+    ad.fullScreenContentCallback = FullScreenContentCallback<AppOpenAd>(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        load(); // preload for the next cold start
+      },
+      onAdFailedToShowFullScreenContent: (ad, _) {
+        ad.dispose();
+        load();
+      },
+    );
+    try {
+      await ad.show();
+      return true;
+    } catch (_) {
+      ad.dispose();
+      load();
+      return false;
+    }
+  }
+
+  void dispose() {
+    _ad?.dispose();
+    _ad = null;
+  }
+}
+
+/// Owns the app's single preloaded interstitial ad (2026-09-11).
+///
+/// Placement policy — natural completion points ONLY, never mid-flow:
+///   • after a successful roster commit (import flow finished end-to-end).
+/// Frequency caps (private, session-level):
+///   • minimum 1 interstitial per 3 successful commits,
+///   • never twice in a row within 60 seconds.
+/// Everything is guarded; ad failure must never break the flow it follows.
+class InterstitialAdService {
+  InterstitialAd? _ad;
+  bool _isLoading = false;
+  int _commitsSinceLastShown = 0;
+  DateTime _lastShownAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// True once an ad is preloaded and ready to show.
+  bool get isReady => _ad != null;
+
+  /// Frequency gate for tests/honesty: the minimum commits between shows.
+  static const int minCommitsBetweenShows = 3;
+
+  /// Preloads an interstitial if ads are enabled and none is pending/ready.
+  Future<void> load() async {
+    if (_ad != null || _isLoading || !adsEnabled()) return;
+    final unit = AdUnitIds.interstitial();
+    if (unit.isEmpty) return;
+    _isLoading = true;
+    try {
+      await InterstitialAd.load(
+        adUnitId: unit,
+        request: const AdRequest(),
+        adLoadCallback: InterstitialAdLoadCallback(
+          onAdLoaded: (ad) {
+            _ad = ad;
+            _isLoading = false;
+          },
+          onAdFailedToLoad: (error) {
+            _isLoading = false;
+          },
+        ),
+      );
+    } catch (_) {
+      _isLoading = false;
+    }
+  }
+
+  /// Call after every SUCCESSFUL roster commit. Shows at most once per
+  /// [minCommitsBetweenShows] commits and never within 60s of the last show.
+  Future<void> maybeShowAfterCommit() async {
+    _commitsSinceLastShown++;
+    if (_commitsSinceLastShown < minCommitsBetweenShows) {
+      load(); // keep a fresh ad ready for the next window
+      return;
+    }
+    if (DateTime.now().difference(_lastShownAt) <
+        const Duration(seconds: 60)) {
+      return;
+    }
+    final ad = _ad;
+    if (ad == null) {
+      load();
+      return;
+    }
+    _ad = null;
+    _commitsSinceLastShown = 0;
+    _lastShownAt = DateTime.now();
+    ad.fullScreenContentCallback = FullScreenContentCallback<InterstitialAd>(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        load();
+      },
+      onAdFailedToShowFullScreenContent: (ad, _) {
+        ad.dispose();
+        load();
+      },
+    );
+    try {
+      await ad.show();
+    } catch (_) {
+      ad.dispose();
+      load();
+    }
+  }
+
+  void dispose() {
+    _ad?.dispose();
+    _ad = null;
   }
 }

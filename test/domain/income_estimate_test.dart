@@ -89,7 +89,7 @@ void main() {
       expect(est.regularPay, closeTo(1400.0, 1e-9)); // 40h x $35
       expect(est.overtimePay, closeTo(105.0, 1e-9)); // 2h x $52.5
       // Every amount ships with the estimate label.
-      expect(WeekIncomeEstimate.disclaimer, contains('Ước tính'));
+      expect(WeekIncomeEstimate.disclaimer, contains('Estimate'));
       db.close();
     });
 
@@ -174,7 +174,7 @@ void main() {
         rangeEnd: '2026-09-08',
       );
       expect(est.available, isFalse);
-      expect(est.unavailableReason, contains('không đoán số'));
+      expect(est.unavailableReason, contains('guessing is not allowed'));
       expect(est.total, 0);
       db.close();
     });
@@ -517,7 +517,7 @@ void main() {
         prospective: w2.sublist(1),
       );
       expect(impact2.available, isFalse);
-      expect(impact2.unavailableReason, contains('không đoán số'));
+      expect(impact2.unavailableReason, contains('guessing is not allowed'));
       db2.close();
     });
 
