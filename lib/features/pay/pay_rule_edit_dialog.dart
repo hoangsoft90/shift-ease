@@ -322,12 +322,20 @@ class _PayRuleEditDialogState extends State<PayRuleEditDialog> {
               if (!mounted) return;
               setState(() => _error = e.message?.toString() ??
                   'Could not save the pay rule. Try again.');
-            } on Exception catch (e) {
+            } on StateError {
+              // Belt-and-braces: A6 StateError is an Error (not Exception)
+              // and would otherwise escape this handler and crash. The
+              // domain translates its own known cases; anything here is a
+              // persistence-level surprise — generic copy, detail to Sentry.
+              if (!mounted) return;
+              setState(() => _error =
+                  'Could not save the pay rule. Try again.');
+            } on Exception {
               if (!mounted) return;
               // Unexpected (DB etc.): short, actionable — no internals.
               // (D-P9.x honesty: detail stays available for Sentry.)
               setState(() => _error =
-                  'Could not save the pay rule. Try again. ($e)');
+                  'Could not save the pay rule. Try again.');
             }
           },
           child: const Text('Save rule'),

@@ -286,7 +286,7 @@ class ScheduleService {
   /// in ONE transaction; a failure rolls both back.
   String savePayRuleFromEditor({required PayRule rule, String? existingId}) {
     if (existingId == null) {
-      _payRepo.savePayRule(rule: rule);
+      _createDraftSafely(rule);
       return 'created';
     }
     final existingRows = _payRepo.allRulesFor(rule.jobId);
@@ -294,7 +294,7 @@ class ScheduleService {
     if (existing == null) {
       // Stale/unknown existingId (e.g. data deleted under us): fall back to
       // an honest create of the draft — still never a same-id overwrite.
-      _payRepo.savePayRule(rule: rule);
+      _createDraftSafely(rule);
       return 'created';
     }
 
@@ -349,6 +349,23 @@ class ScheduleService {
       rethrow;
     }
     return 'versioned';
+  }
+
+  /// First-create insert for the editor use-case. The deterministic slug id
+  /// can collide with a LEGACY row (created before versioning UX, possibly
+  /// closed since — so NOT active today and invisible to the editor's
+  /// existing lookup): the repo then refuses with its A6 StateError. A
+  /// StateError is an Error, not an Exception — it would escape UI handlers
+  /// and crash. Translate to the same user-facing ArgumentError contract the
+  /// rest of this use-case uses (copy per plan D4: no Gate A / internals).
+  void _createDraftSafely(PayRule rule) {
+    try {
+      _payRepo.savePayRule(rule: rule);
+    } on StateError {
+      throw ArgumentError(
+          'A pay rule version already exists for this From date — pick a '
+          'different date to create a new version.');
+    }
   }
 
   /// Canonical payload comparison for the idempotency check: base rate,

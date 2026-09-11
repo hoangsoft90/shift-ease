@@ -53,17 +53,19 @@ void main() {
 
   late Database db;
   late ScheduleService service;
+  late PayRuleRepository payRepo;
   late String jobId;
   late String today;
 
   setUp(() {
     db = dblib.openInMemory();
     final patterns = PatternRepository(db);
+    payRepo = PayRuleRepository(db, patterns);
     service = ScheduleService(
       patterns: patterns,
       schedule: ScheduleRepository(db, patterns),
       db: db,
-      pay: PayRuleRepository(db, patterns),
+      pay: payRepo,
     );
     jobId = service.createJob(name: 'Hospital', timezone: _tz);
     final n = DateTime.now();
@@ -158,6 +160,46 @@ void main() {
       throwsA(isA<StateError>()),
     );
     expect(service.payRules(jobId).single.baseHourlyRate, 25);
+  });
+
+  test('M1 (code review): first-create colliding with a legacy CLOSED row '
+      'under the same deterministic slug id → ArgumentError (never an '
+      'uncaught StateError)', () {
+    // Simulate the legacy world: a rule created by the OLD editor, which
+    // minted id = slugId(job, from). It has since been closed — so it is
+    // NOT active today and invisible to the editor's existing-rule lookup.
+    final legacyId = slugId('payrule', [jobId, today]);
+    service.savePayRule(PayRule(
+      id: legacyId,
+      jobId: jobId,
+      baseHourlyRate: 20,
+      differentials: const [],
+      overtimeRules: const [],
+      effectiveFrom: today,
+    ));
+    payRepo.closePayRuleVersion(
+        ruleId: legacyId, effectiveUntil: today);
+
+    // The editor sees no active rule → treats this as a first create with
+    // the same From date — and (as the dialog does) mints the SAME
+    // deterministic slug id. Before the M1 fix this escaped as StateError.
+    expect(
+      () => service.savePayRuleFromEditor(
+        rule: PayRule(
+          id: legacyId, // exactly what the editor's first-create mints
+          jobId: jobId,
+          baseHourlyRate: 25,
+          differentials: const [],
+          overtimeRules: const [],
+          effectiveFrom: today,
+        ),
+      ),
+      throwsA(isA<ArgumentError>().having(
+          (e) => e.message, 'message', contains('already exists'))),
+    );
+    // Nothing written: the legacy row is untouched.
+    expect(service.payRules(jobId).length, 1);
+    expect(service.payRules(jobId).single.baseHourlyRate, 20);
   });
 
   test('atomicity: failure after close rolls BOTH back (old stays open)', () {

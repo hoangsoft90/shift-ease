@@ -53,6 +53,11 @@
 - `flutter analyze --no-pub --fatal-infos` → **No issues found!**
 - `flutter test test/` → **340/340 All tests passed!** (332 + 6 domain + 2 UI)
 
+## 5b. Code-review pass (2026-09-11, sau commit `1769d29`) — 1 M1 đã sửa
+
+- **M1 (crash path, đã fix):** first-create với From trùng id deterministic `slugId(job, from)` của một row LEGACY đã bị đóng (không active hôm nay → editor không thấy) → repo ném StateError (A6) — là `Error` không phải `Exception`, thoát mọi handler UI → **crash**. Fix: `_createDraftSafely` trong domain translate StateError → ArgumentError với copy user-facing; dialog thêm catch `StateError` belt-and-braces. Regression test mới: legacy closed row cùng id → ArgumentError, không write nào.
+- **341/341 tests** (340 + 1 M1 regression) · analyze sạch sau fix.
+
 ## 6. Acceptance (plan §8)
 
 - [x] User đổi rate bấm Save **không** thấy lỗi A6 technical (widget test chứng minh)
