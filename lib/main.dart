@@ -45,6 +45,7 @@ import 'package:shiftease/features/security/secure_secret_store.dart';
 import 'package:shiftease/features/ads/ad_banner_widget.dart'
     show appOpenAds;
 import 'package:shiftease/features/ads/ad_service.dart';
+import 'package:shiftease/config/ads_config.dart' show AppAdsConfig;
 
 /// Production composition (Gate A §A1): all repositories share ONE database
 /// connection so a transaction genuinely spans them — the import commit is
@@ -130,9 +131,11 @@ class _BootstrapState extends State<_Bootstrap> {
       // interactive; the ad never gates startup (INVARIANT-008). Runs exactly
       // once per process (initState), NOT in build() — rebuilds must not
       // re-run the UMP consent flow. Google guidance: app-open on cold start.
-      initializeAds()
-          .then((_) => appOpenAds.load())
-          .then((_) => appOpenAds.showIfAvailable());
+      if (AppAdsConfig.enableAds) {
+        initializeAds()
+            .then((_) => appOpenAds.load())
+            .then((_) => appOpenAds.showIfAvailable());
+      }
     } on SecretStoreException catch (e) {
       if (!mounted) return;
       setState(() {

@@ -55,4 +55,5 @@ flutter_launcher_icons:
 # FLIP TO FALSE ONLY when production AdMob unit IDs are supplied below.
 admob:
   test_ads: true
+  enable_ads: true
 

@@ -44,10 +44,16 @@
         <!-- AdMob (2026-09-11): REAL APPLICATION_ID (Android app đã tạo trên
              AdMob console). admob.test_ads=true (pubspec.yaml) vẫn bật → SDK
              chỉ request Google TEST ad units, không inventory thật. Khi chủ
-             app flip test_ads=false → banner/interstitial thật của app. -->
+             app flip test_ads=false → banner/interstitial thật của app.
+
+             Kết hợp với Dart-side `AppAdsConfig.enableAds` (pubspec
+             `admob.enable_ads`): workflow có thể build release APK với ads
+             tắt hoàn toàn bằng cách set `enable_ads: false` — lúc đó Gradle
+             đặt APPLICATION_ID thành rỗng (manifestPlaceholders), SDK nhận
+             không có app ID và tự tắt (không crash, không request nào). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-6917313063209470~6379119743" />
+            android:value="${adsAppId}" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

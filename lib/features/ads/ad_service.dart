@@ -39,7 +39,14 @@ Future<void> initializeAds() => _initializeAdsOnce ??= _initializeAdsInner();
 Future<void>? _initializeAdsOnce;
 
 Future<void> _initializeAdsInner() async {
-  if (!adsEnabled()) return;
+  if (!adsEnabled()) return; // also covers AppAdsConfig.enableAds == false
+  if (!AppAdsConfig.enableAds) {
+    // Master switch off: SDK init and all ad placement are skipped entirely.
+    // (This branch is redundant with the adsEnabled() early-return above but
+    //  keeps the intent explicit for reviewers and Sentry-occasionally reports
+    //  dead code as suspicious.)
+    return;
+  }
   try {
     // 1. UMP consent (EEA/UK): update consent info, then show the form if
     //    required. Failure/timespans here only mean "no consent form shown"

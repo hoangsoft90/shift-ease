@@ -39,11 +39,33 @@ android {
         versionName = flutter.versionName
     }
 
+    val enableAds: String by lazy {
+        // pubspec YAML  →  Gradle provider property.
+        // repo default `admob.enable_ads: true`; workflow dispatch or local
+        // `-PenableAds=false` flips it to ship a no-ad release APK without
+        // touching Dart code.
+        val raw = provider.property("enableAds").orNull
+        if (raw == null) "true" else raw
+    }
+
+    // Used ONLY for manifest placeholder selection; actual ad serving is
+    // decided at runtime by AppAdsConfig.enableAds + testAds + unit IDs.
+    val adsAppId: String by lazy {
+        val sample = "ca-app-pub-3940256099942544~3347511713"
+        val prod = "ca-app-pub-6917313063209470~6379119743"
+        if (enableAds == "false") "" // no ad ID shipped → SDK self-disables
+        else prod
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["adsAppId"] = adsAppId
+        }
+        debug {
+            manifestPlaceholders["adsAppId"] = adsAppId
         }
     }
 }

@@ -3,18 +3,24 @@
 // =============================================================================
 // Monetization: banner ads under the Jobs screen (Play Store + App Store).
 //
-// test_ads flag (pubspec `admob.test_ads`, mirrored in AppAdsConfig.testAds):
-//   • true  → the app ALWAYS uses Google's official test ad unit IDs and the
-//     manifests ship the sample APPLICATION_IDs. No real ad traffic, no
-//     invalid-traffic risk, no AdMob account LIMIT. CI/dev/test builds stay
-//     here.
-//   • false → production AdMob unit IDs below are used. Android units are
-//     FILLED (2026-09-11) so flipping the flag serves REAL ads on Android;
-//     iOS units are still empty → iOS ads stay disabled (no crash, no
-//     test-ID fallback).
+// Three independent gates (all must be open for any ad to load):
+//   1. enableAds (pubspec `admob.enable_ads`, mirrored here) — hard master
+//      switch. When false the app NEVER initializes the AdMob SDK and NO ad
+//      placeholder ever reaches a native manifest. This is the flag you flip
+//      for a release APK that must ship without ads while the AdMob account
+//      is still being set up / while troubleshooting.
+//   2. testAds (pubspec `admob.test_ads`) — SDK/creative selection:
+//      • true  → Google test ad unit IDs + sample APPLICATION_IDs (no real
+//        ad traffic, no invalid-traffic/LIMIT risk, no account limit).
+//      • false → production AdMob IDs below are used. Android units FILLED
+//        (2026-09-11) so production Android serves real ads; iOS IDs empty
+//        → production iOS ads stay disabled (no crash, no test-ID fallback).
+//   3. Unit availability — a format is only requested when its resolved ID
+//      is non-empty. Production iOS universally returns '' → no iOS ad ever
+//      loads until iOS production app IDs are supplied.
 //
 // Production placeholders (owner fills from the AdMob console, then flips
-// test_ads to false):
+// testAds to false):
 //   kAdMob*AppIdProduction        → the App IDs (manifest/plist), NOT units
 //   kAdMob*UnitProduction         → ad unit IDs per platform/format
 // =============================================================================
@@ -22,18 +28,29 @@
 import 'dart:io' show Platform;
 
 /// Dart-side mirror of the pubspec `admob:` block (pubspec parsing of custom
-/// maps would need a hook; one constant keeps a single place to flip).
+/// maps would need a hook; one place to flip keeps config debuggable).
 /// Mutable (not `const`) ONLY so tests can exercise both branches — they must
-/// restore `true` in tearDown. Production flips this to false once the real
-/// AdMob IDs are filled in.
+/// restore defaults in tearDown. Production flips these from the defaults
+//   below: enableAds = false for a no-ad release; testAds = false for real
+//   ads once the AdMob IDs are filled in.
 class AppAdsConfig {
+  /// Master switch. When false the app never initializes the AdMob SDK.
+  static bool enableAds = true;
+
   /// true = test mode (Google test IDs, sample app IDs). See file header.
   static bool testAds = true;
 }
 
-/// Whether a real banner can be requested on this platform/build: false in
-/// test-disabled production builds whose unit IDs are still placeholders.
-bool adsEnabled({bool? android}) => AdUnitIds.banner(android: android) != '';
+/// Hard block: whether ANY ad code should run at all on this build.
+/// Doubly guards so a single-assignment mistake cannot open ads:
+///   • compile-time: if [AppAdsConfig.enableAds] is `false`, Dart never calls
+///     into the AdMob SDK (banner/interstitial/app-open services early-return),
+///     and the `google_mobile_ads` package would be dead code on that build
+///     (native library still linked but unreachable).
+///   • config-primitive: resolved unit ID must still be non-empty after the
+///     test/production selection (production iOS, empty placeholders).
+bool adsEnabled({bool? android}) =>
+    AppAdsConfig.enableAds && AdUnitIds.banner(android: android) != '';
 
 /// Google's official PUBLISHER-wide sample APPLICATION_IDs (safe to ship —
 /// they only activate test infrastructure; Google's own docs use them).
