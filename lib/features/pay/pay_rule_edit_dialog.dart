@@ -44,6 +44,9 @@ class _PayRuleEditDialogState extends State<PayRuleEditDialog> {
   DateTime _effectiveFrom = DateTime.now();
   String? _error;
   PayPreset? _activePreset;
+  /// Id of the version being edited — in-memory ONLY. Never re-saved when
+  /// the payload changed (a change mints a new id via the domain API).
+  String? _existingRuleId;
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _PayRuleEditDialogState extends State<PayRuleEditDialog> {
     final active = widget.service
         .activePayRule(jobId: widget.jobId, date: _isoDate(_effectiveFrom));
     if (active != null) {
+      _existingRuleId = active.id;
       _effectiveFrom = DateTime.parse(active.effectiveFrom);
       _base.text = active.baseHourlyRate.toStringAsFixed(2);
       for (final d in active.differentials) {
@@ -284,24 +288,47 @@ class _PayRuleEditDialogState extends State<PayRuleEditDialog> {
                 ),
             ];
             final from = _isoDate(_effectiveFrom);
+            // plan_payrule_version_ux.md D2/D4: Save goes through the
+            // smart-versioning use-case — an edited rule transparently
+            // becomes a NEW version (old one closed); an unchanged save is
+            // a no-op. Raw persistence errors (A6 etc.) never surface.
             try {
-              widget.service.savePayRule(PayRule(
-                id: slugId('payrule', [widget.jobId, from]),
-                jobId: widget.jobId,
-                baseHourlyRate: base,
-                differentials: differentials,
-                overtimeRules: overtimeRules,
-                effectiveFrom: from,
-              ));
-            } on StateError catch (e) {
-              // Same job + same From date with a DIFFERENT payload hits the
-              // Gate A §A6 immutability guard. Show it on the form — the
-              // dialog must never just fail to close with no feedback.
-              setState(() => _error = 'Could not save: ${e.message}\n'
-                  'Pick a later "From" date to create a new version.');
-              return;
+              final outcome = widget.service.savePayRuleFromEditor(
+                rule: PayRule(
+                  // The id is minted by the domain for changed payloads;
+                  // this id field is only used for first-create / no-op.
+                  id: _existingRuleId ??
+                      slugId('payrule', [widget.jobId, from]),
+                  jobId: widget.jobId,
+                  baseHourlyRate: base,
+                  differentials: differentials,
+                  overtimeRules: overtimeRules,
+                  effectiveFrom: from,
+                ),
+                existingId: _existingRuleId,
+              );
+              if (!mounted) return;
+              // Capture the messenger BEFORE pop (the dialog context is
+              // torn down right after) — success copy: one honest line.
+              // 'no changes' is silent success (no version spam). D5: a
+              // preset only prefilled the form; this save is the explicit act.
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.of(context).pop(true);
+              if (outcome == 'versioned' || outcome == 'created') {
+                messenger.showSnackBar(SnackBar(
+                    content: Text('Pay rule saved. Applies from $from.')));
+              }
+            } on ArgumentError catch (e) {
+              if (!mounted) return;
+              setState(() => _error = e.message?.toString() ??
+                  'Could not save the pay rule. Try again.');
+            } on Exception catch (e) {
+              if (!mounted) return;
+              // Unexpected (DB etc.): short, actionable — no internals.
+              // (D-P9.x honesty: detail stays available for Sentry.)
+              setState(() => _error =
+                  'Could not save the pay rule. Try again. ($e)');
             }
-            Navigator.of(context).pop(true);
           },
           child: const Text('Save rule'),
         ),

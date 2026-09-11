@@ -41,7 +41,7 @@ class PayRuleRepository {
   ///   - malformed money numbers (non-positive base rate, negative
   ///     differential value, negative OT threshold, multiplier < 1) are
   ///     loud ArgumentErrors — never silently stored as a different rule.
-  void savePayRule({required PayRule rule}) {
+  void savePayRule({required PayRule rule, bool ownsTransaction = true}) {
     final jobRows =
         db.select('SELECT uuid FROM jobs WHERE id = ?', [rule.jobId]);
     if (jobRows.isEmpty) {
@@ -77,7 +77,7 @@ class PayRuleRepository {
             'PayRule OT multiplier must be >= 1 (got ${o.multiplier}).');
       }
     }
-    db.execute('BEGIN');
+    if (ownsTransaction) db.execute('BEGIN');
     try {
       // Gate A §A6 — check existence BEFORE any write. A same-id re-save is
       // allowed only when the payload is identical (idempotent no-op); any
@@ -150,9 +150,44 @@ class PayRuleRepository {
         );
       }
 
-      db.execute('COMMIT');
+      if (ownsTransaction) db.execute('COMMIT');
     } catch (_) {
-      db.execute('ROLLBACK');
+      if (ownsTransaction) db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  /// PayRule versioning UX (plan_payrule_version_ux.md §5): the ONLY
+  /// same-id write allowed besides an identical re-save — closing a version
+  /// by setting [effectiveUntil] (null → date, exactly once). Rate payload
+  /// on the SAME id is still impossible to change anywhere; a rate change
+  /// must mint a NEW id through [ScheduleService.savePayRuleFromEditor].
+  /// When [ownsTransaction] is false the CALLER owns BEGIN/COMMIT/ROLLBACK
+  /// (close old + insert new must be ONE atomic unit).
+  void closePayRuleVersion({
+    required String ruleId,
+    required String effectiveUntil,
+    bool ownsTransaction = true,
+  }) {
+    final rows = db.select(
+        'SELECT uuid, effectiveUntil FROM pay_rules WHERE id = ?', [ruleId]);
+    if (rows.isEmpty) {
+      throw ArgumentError('Cannot close unknown PayRule $ruleId.');
+    }
+    final current = rows.first['effectiveUntil'] as String?;
+    if (current != null) {
+      throw ArgumentError(
+          'PayRule $ruleId is already closed (effectiveUntil = $current) — '
+          'closing is a one-time null→date transition.');
+    }
+    if (ownsTransaction) db.execute('BEGIN');
+    try {
+      db.execute(
+          'UPDATE pay_rules SET effectiveUntil = ? WHERE id = ?',
+          [effectiveUntil, ruleId]);
+      if (ownsTransaction) db.execute('COMMIT');
+    } catch (_) {
+      if (ownsTransaction) db.execute('ROLLBACK');
       rethrow;
     }
   }

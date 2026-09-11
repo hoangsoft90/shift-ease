@@ -268,6 +268,106 @@ class ScheduleService {
   /// identical payload; same-id + different payload throws (Gate A §A6).
   void savePayRule(PayRule rule) => _payRepo.savePayRule(rule: rule);
 
+  /// PayRule versioning UX (plan_payrule_version_ux.md): the use-case behind
+  /// the editor's Save button. The USER never deals with ids — saving an
+  /// edited rule transparently mints a NEW version (new id, old version
+  /// closed) instead of hitting the A6 immutability guard. Contract:
+  ///
+  /// - [rule] is the COMPLETE draft from the editor (already validated).
+  /// - [existingId] — the id of the version being edited, or null for a
+  ///   first create. NEVER re-save a changed payload under the same id.
+  /// - Returns 'noOp' when the draft is identical to the existing version
+  ///   (nothing written), 'created' for a first version, 'versioned' when a
+  ///   new version was minted and the old one closed.
+  ///
+  /// Validation (Option B of the plan): a CHANGED draft must carry
+  /// [rule.effectiveFrom] >= max(today, existing.effectiveFrom) — future
+  /// versions never re-price the past (INVARIANT-006). Close + insert runs
+  /// in ONE transaction; a failure rolls both back.
+  String savePayRuleFromEditor({required PayRule rule, String? existingId}) {
+    if (existingId == null) {
+      _payRepo.savePayRule(rule: rule);
+      return 'created';
+    }
+    final existingRows = _payRepo.allRulesFor(rule.jobId);
+    final existing = existingRows.where((r) => r.id == existingId).firstOrNull;
+    if (existing == null) {
+      // Stale/unknown existingId (e.g. data deleted under us): fall back to
+      // an honest create of the draft — still never a same-id overwrite.
+      _payRepo.savePayRule(rule: rule);
+      return 'created';
+    }
+
+    // Idempotent no-op: the editor's numeric round-trip can make an
+    // untouched rule compare unequal; compare through canonical forms.
+    if (_payRulesCanonical(existing) == _payRulesCanonical(rule)) {
+      return 'noOp';
+    }
+
+    // Option B: changed payload must apply from >= max(today, existing.from).
+    final today = DateTime.now();
+    final todayIso =
+        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final floorDate = todayIso.compareTo(existing.effectiveFrom) > 0
+        ? todayIso
+        : existing.effectiveFrom;
+    if (rule.effectiveFrom.compareTo(floorDate) < 0) {
+      throw ArgumentError(
+          'Choose a From date on or after $floorDate to apply new rates.');
+    }
+
+    // Close the old version up to the day BEFORE the new From (inclusive
+    // semantics: effectiveUntil >= date is still active), then insert the
+    // new version atomically.
+    final newFrom = DateTime.parse(rule.effectiveFrom);
+    final dayBefore = newFrom.subtract(const Duration(days: 1));
+    final untilIso =
+        '${dayBefore.year.toString().padLeft(4, '0')}-${dayBefore.month.toString().padLeft(2, '0')}-${dayBefore.day.toString().padLeft(2, '0')}';
+    _db.execute('BEGIN');
+    try {
+      _payRepo.closePayRuleVersion(
+        ruleId: existingId,
+        effectiveUntil: untilIso,
+        ownsTransaction: false,
+      );
+      final newId = slugId('payrule', [rule.jobId, rule.effectiveFrom,
+        existingId]);
+      _payRepo.savePayRule(
+        rule: PayRule(
+          id: newId,
+          jobId: rule.jobId,
+          baseHourlyRate: rule.baseHourlyRate,
+          differentials: rule.differentials,
+          overtimeRules: rule.overtimeRules,
+          effectiveFrom: rule.effectiveFrom,
+        ),
+        ownsTransaction: false,
+      );
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+    return 'versioned';
+  }
+
+  /// Canonical payload comparison for the idempotency check: base rate,
+  /// sorted differentials, sorted OT rules, and the effectiveFrom date.
+  /// Deliberately EXCLUDES id/effectiveUntil — closing metadata must not
+  /// make an untouched save look "changed".
+  String _payRulesCanonical(PayRule r) {
+    String diffKey(PayDifferential d) =>
+        '${d.type.name}|${d.mode.name}|${d.value}|'
+        '${d.scope.name}|${d.window?.startLocal ?? '-'}|${d.window?.endLocal ?? '-'}';
+    String otKey(OvertimeRule o) =>
+        '${o.period.name}|${o.thresholdHours}|${o.multiplier}';
+    final diffs = [...r.differentials]..sort((a, b) =>
+        diffKey(a).compareTo(diffKey(b)));
+    final ots = [...r.overtimeRules]..sort((a, b) => otKey(a).compareTo(otKey(b)));
+    return ['${r.baseHourlyRate}', r.effectiveFrom, ...diffs.map(diffKey),
+      ...ots.map(otKey)].join('#');
+  }
+
   /// All rule versions of [jobId] (INVARIANT-006 — never rewritten history).
   List<PayRule> payRules(String jobId) => _payRepo.allRulesFor(jobId);
 
