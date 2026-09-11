@@ -1,0 +1,191 @@
+# ShiftEase CI — rewritten for the Flutter ROOT project (P7_fix2.md).
+#
+# History note: this file previously targeted an old Dart-only project layout
+# (`dart test` + `source/`). That is wrong for this repo on two counts:
+#   1. even lib/core tests import package:flutter_test and must run under
+#      `flutter test`;
+#   2. since P7.2 the native SQLite layer is SQLCipher, linked by the
+#      package:sqlite3 3.x build hook (pubspec `source: sqlcipher`) — the
+#      system libsqlite3-dev is NOT used and installing it is misleading.
+#      Every `flutter test` run here therefore compiles libsqlcipher.so and
+#      test/core/db/security_gate_test.dart asserts a real `PRAGMA
+#      cipher_version` on an encrypted file DB — i.e. a green CI run IS the
+#      P7.2 native-encryption proof (no device required).
+#
+# The per-engine jobs keep failures localized; `full-suite` re-runs the
+# ENTIRE suite exactly as the discipline requires (flutter test test/) —
+# it is the gate doc/mobile_readiness.md row 1 points at. scripts/*.mjs
+# cross-check goldens with an independent Node implementation.
+#
+# APK builds live in build-debug-apk.yml (debug-signed device-matrix artifact).
+
+name: ShiftEase CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - 'ios/**'
+      - 'scripts/**'
+      - 'tool/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - 'ios/**'
+      - 'scripts/**'
+      - 'tool/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  static-analysis:
+    name: "Static Analysis (whole project)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze whole project (core + domain + features + app)
+        run: flutter analyze --fatal-warnings
+      - name: Enforce dependency rule (plan2 §1.1) — core/ must not import domain/features/app
+        run: |
+          if grep -rnE "import 'package:shiftease/(domain|features|app)/" lib/core/; then
+            echo "Dependency rule violated (plan2 §1.1): lib/core must not import domain/features/app."
+            exit 1
+          fi
+          if grep -rnE "import 'package:shiftease/(features|app)/" lib/domain/; then
+            echo "Dependency rule violated (plan2 §1.1): lib/domain must not import features/app."
+            exit 1
+          fi
+          echo "Dependency rules OK"
+
+  core-time-tests:
+    name: "Time Engine Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run Time Engine tests (golden + invariant)
+        run: flutter test test/core/time/ --reporter expanded
+      - name: Verify time golden cases independently (Node Intl)
+        run: node scripts/verify_all_cases.mjs
+
+  core-pattern-tests:
+    name: "Pattern Engine Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run Pattern Engine tests (engine + property)
+        run: flutter test test/core/pattern/ test/core/property/ --reporter expanded
+      - name: Run Time+Pattern integration
+        run: flutter test test/core/integration/pattern_time_integration_test.dart --reporter expanded
+
+  core-money-tests:
+    name: "Money Engine Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run Money Engine tests (golden + unit)
+        run: flutter test test/core/money/ --reporter expanded
+      - name: Run Pattern+Money integration
+        run: flutter test test/core/integration/pattern_money_integration_test.dart --reporter expanded
+      - name: Verify money golden cases independently
+        run: node scripts/verify_money_cases.mjs
+
+  import-tests:
+    name: "Import Pipeline Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: "Run Import Pipeline tests (INVARIANT-004: no auto-commit)"
+        run: flutter test test/core/import/ --reporter expanded
+      - name: Run Import+Money integration
+        run: flutter test test/core/integration/import_money_integration_test.dart --reporter expanded
+      - name: Verify import golden cases independently
+        run: node scripts/verify_import_cases.mjs
+
+  persistence-tests:
+    name: "Persistence Layer Tests (SQLCipher via build hook)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: "P7.2 proof: linked build must be SQLCipher (cipher_version)"
+        run: dart run tool/cipher_proof.dart
+      - name: Run Persistence tests (migration, repos, replay, INVARIANT-006, P7.2 encryption)
+        run: flutter test test/core/db/ --reporter expanded
+      - name: Run DB+Money integration (render -> price -> snapshot)
+        run: flutter test test/core/integration/db_money_integration_test.dart --reporter expanded
+      - name: Run DB+Pattern integration (version boundary, 6-op replay)
+        run: flutter test test/core/integration/db_pattern_integration_test.dart --reporter expanded
+
+  ui-tests:
+    name: "UI + Domain Service Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run Domain service tests (DoD restart persistence, CREATE convention)
+        run: flutter test test/domain/ --reporter expanded
+      - name: Run UI widget tests (DoD flow job→pattern→calendar→edit, INVARIANT-001)
+        run: flutter test test/ui/ --reporter expanded
+
+  # The gate: ENTIRE suite (core + domain + ui + features) on one runner,
+  # exactly as local verification runs it. This includes the RC bundles the
+  # per-engine jobs above don't cover individually (features/, rc_adversarial,
+  # settings_flow, secure_secret_store, ...).
+  full-suite:
+    name: "Full Suite (flutter test test/)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze --fatal-warnings
+      - name: Run the FULL suite (core + domain + ui + features)
+        run: flutter test test/ --reporter compact

@@ -1,0 +1,419 @@
+{
+  "metadata": {
+    "version": "2.0.0",
+    "description": "Golden test cases for ShiftEase Money Engine (Pay Breakdown)",
+    "required_invariants": ["INVARIANT-005", "INVARIANT-006"],
+    "pay_algorithm": "Method B — Regular + Overtime separated (no double-counting)"
+  },
+  "cases": [
+    {
+      "id": "PAY-001",
+      "name": "Simple day shift, no differentials, no OT",
+      "type": "BASELINE",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [],
+        "overtimeRules": [],
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 420.00,
+        "overtimePay": 0.00,
+        "total": 420.00,
+        "breakdownLines": 1
+      }
+    },
+    {
+      "id": "PAY-002",
+      "name": "Night shift with NIGHT differential (percent)",
+      "type": "DIFFERENTIAL",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [
+          { "type": "NIGHT", "calc": { "mode": "PERCENT", "value": 10 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [],
+        "isNightShift": true,
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 420.00,
+        "nightDiff": 42.00,
+        "overtimePay": 0.00,
+        "total": 462.00,
+        "breakdownLines": 2
+      }
+    },
+    {
+      "id": "PAY-003",
+      "name": "Night + Weekend differentials (percent + flat)",
+      "type": "MULTI_DIFFERENTIAL",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [
+          { "type": "NIGHT", "calc": { "mode": "PERCENT", "value": 10 }, "appliesTo": "ALL_HOURS_IN_SHIFT" },
+          { "type": "WEEKEND", "calc": { "mode": "FLAT", "value": 3.00 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [],
+        "isNightShift": true,
+        "isWeekend": true,
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 420.00,
+        "nightDiff": 42.00,
+        "weekendDiff": 36.00,
+        "overtimePay": 0.00,
+        "total": 498.00,
+        "breakdownLines": 3
+      }
+    },
+    {
+      "id": "PAY-004",
+      "name": "SHIFT overtime only (10h shift, threshold 8h, multiplier 1.5)",
+      "type": "OVERTIME",
+      "input": {
+        "shiftHours": 10,
+        "baseRate": 35.00,
+        "differentials": [],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 }
+        ],
+        "dailyHours": 10,
+        "weeklyHours": 30
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "overtimeHours": 2,
+        "overtimePay": 105.00,
+        "total": 385.00,
+        "breakdownLines": 2,
+        "note": "8h regular x $35 + 2h OT x $52.50. No double-count."
+      }
+    },
+    {
+      "id": "PAY-005",
+      "name": "WEEK overtime only (daily below threshold, weekly exceeds)",
+      "type": "OVERTIME",
+      "input": {
+        "shiftHours": 10,
+        "baseRate": 35.00,
+        "differentials": [],
+        "overtimeRules": [
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ],
+        "dailyHours": 10,
+        "weeklyHours": 42
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "overtimeHours": 2,
+        "overtimePay": 105.00,
+        "total": 385.00,
+        "breakdownLines": 2,
+        "note": "Method B: regularHours = 10h - 2h OT = 8h. 8h x $35 = $280. OT: 2h x $35 x 1.5 = $105. Week rule: 42h total - 40h threshold = 2h OT attributed to this shift."
+      }
+    },
+    {
+      "id": "PAY-006",
+      "name": "Both SHIFT and WEEK rules — max applies (no double-count)",
+      "type": "OVERTIME_MULTI_RULE",
+      "input": {
+        "shiftHours": 10,
+        "baseRate": 35.00,
+        "differentials": [],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 },
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ],
+        "dailyHours": 10,
+        "weeklyHours": 42
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "overtimeHours": 2,
+        "overtimePay": 105.00,
+        "total": 385.00,
+        "breakdownLines": 2,
+        "note": "SHIFT: 10-8=2h, WEEK: 42-40=2h. max(2,2)=2h OT. No double-count."
+      }
+    },
+    {
+      "id": "PAY-007",
+      "name": "California nurse: 12h shift, 44h week, NIGHT diff (week OT >= shift OT)",
+      "type": "CALIFORNIA_COMPLEX",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [
+          { "type": "NIGHT", "calc": { "mode": "PERCENT", "value": 10 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 },
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ],
+        "isNightShift": true,
+        "dailyHours": 12,
+        "weeklyHours": 44
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "nightDiff": 28.00,
+        "overtimeHours": 4,
+        "overtimePay": 210.00,
+        "total": 518.00,
+        "breakdownLines": 3,
+        "note": "SHIFT: 12-8=4h, WEEK: 44-40=4h. max(4,4)=4h OT. Night diff on regular hours only (8h)."
+      }
+    },
+    {
+      "id": "PAY-008",
+      "name": "No overtime (shift below all thresholds)",
+      "type": "NO_OT",
+      "input": {
+        "shiftHours": 7,
+        "baseRate": 40.00,
+        "differentials": [],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 },
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ],
+        "dailyHours": 7,
+        "weeklyHours": 28
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "overtimeHours": 0,
+        "overtimePay": 0.00,
+        "total": 280.00,
+        "breakdownLines": 1,
+        "note": "7h < 8h shift threshold, 28h < 40h week threshold. No OT."
+      }
+    },
+    {
+      "id": "PAY-009",
+      "name": "HOLIDAY differential (flat rate)",
+      "type": "DIFFERENTIAL",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [
+          { "type": "HOLIDAY", "calc": { "mode": "FLAT", "value": 5.00 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [],
+        "isHoliday": true,
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 420.00,
+        "holidayDiff": 60.00,
+        "overtimePay": 0.00,
+        "total": 480.00,
+        "breakdownLines": 2
+      }
+    },
+    {
+      "id": "PAY-010",
+      "name": "PayRuleTemplate: US Hospital Nurse — California (full template apply)",
+      "type": "TEMPLATE",
+      "templateId": "tpl-us-ca-nurse",
+      "input": {
+        "templateName": "US Hospital Nurse — California",
+        "baseRate": 45.00,
+        "shiftHours": 12,
+        "isNightShift": true,
+        "isWeekend": false,
+        "dailyHours": 12,
+        "weeklyHours": 44,
+        "differentials": [
+          { "type": "NIGHT", "calc": { "mode": "PERCENT", "value": 10 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 },
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ]
+      },
+      "expected": {
+        "regularPay": 360.00,
+        "nightDiff": 36.00,
+        "overtimeHours": 4,
+        "overtimePay": 270.00,
+        "total": 666.00,
+        "breakdownLines": 3,
+        "note": "CA template: daily OT >8h OR weekly OT >40h, max applies. 12h shift: 8 regular + 4 OT. Night diff on regular only (8h x $45 x 10% = $36). OT: 4h x $45 x 1.5 = $270."
+      }
+    },
+    {
+      "id": "PAY-011",
+      "name": "PayRule versioning: historical snapshot immutability (INVARIANT-006)",
+      "type": "VERSIONING",
+      "invariant": "INVARIANT-006",
+      "input": {
+        "scenario": "Two PayRule versions. Calculate pay for occurrence in v1 period, then change to v2.",
+        "payRuleV1": {
+          "effectiveFrom": "2026-01-01",
+          "effectiveUntil": "2026-06-30",
+          "baseHourlyRate": 35.00,
+          "overtimeRules": [{ "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 }]
+        },
+        "payRuleV2": {
+          "effectiveFrom": "2026-07-01",
+          "effectiveUntil": null,
+          "baseHourlyRate": 40.00,
+          "overtimeRules": [{ "thresholdHours": 8, "period": "SHIFT", "multiplier": 2.0 }]
+        },
+        "occurrenceV1": {
+          "shiftDate": "2026-06-15",
+          "shiftHours": 10,
+          "dailyHours": 10,
+          "weeklyHours": 30
+        },
+        "occurrenceV2": {
+          "shiftDate": "2026-07-15",
+          "shiftHours": 10,
+          "dailyHours": 10,
+          "weeklyHours": 30
+        }
+      },
+      "expected": {
+        "occurrenceV1_pay": {
+          "regularPay": 280.00,
+          "overtimeHours": 2,
+          "overtimePay": 105.00,
+          "total": 385.00,
+          "note": "Uses v1 rate ($35) and v1 OT multiplier (1.5). Snapshot at time of calculation."
+        },
+        "occurrenceV2_pay": {
+          "regularPay": 320.00,
+          "overtimeHours": 2,
+          "overtimePay": 160.00,
+          "total": 480.00,
+          "note": "Uses v2 rate ($40) and v2 OT multiplier (2.0)."
+        },
+        "invariant_check": "After creating v2, re-querying occurrenceV1.payEstimate must still return $385.00 (not $480.00). Historical snapshot is immutable."
+      }
+    },
+    {
+      "id": "PAY-012",
+      "name": "Multiple differentials + OT combined (night + weekend + holiday + OT)",
+      "type": "COMPLEX_COMBINATION",
+      "input": {
+        "shiftHours": 12,
+        "baseRate": 35.00,
+        "differentials": [
+          { "type": "NIGHT", "calc": { "mode": "PERCENT", "value": 10 }, "appliesTo": "ALL_HOURS_IN_SHIFT" },
+          { "type": "WEEKEND", "calc": { "mode": "PERCENT", "value": 15 }, "appliesTo": "ALL_HOURS_IN_SHIFT" },
+          { "type": "HOLIDAY", "calc": { "mode": "FLAT", "value": 5.00 }, "appliesTo": "ALL_HOURS_IN_SHIFT" }
+        ],
+        "overtimeRules": [
+          { "thresholdHours": 8, "period": "SHIFT", "multiplier": 1.5 }
+        ],
+        "isNightShift": true,
+        "isWeekend": true,
+        "isHoliday": true,
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 280.00,
+        "nightDiff": 28.00,
+        "weekendDiff": 42.00,
+        "holidayDiff": 40.00,
+        "overtimeHours": 4,
+        "overtimePay": 210.00,
+        "total": 600.00,
+        "breakdownLines": 5,
+        "note": "8h regular x $35 = $280. Diffs on regular hours: NIGHT 8x$35x10%=$28, WEEKEND 8x$35x15%=$42, HOLIDAY 8x$5=$40. OT: 4h x $35 x 1.5 = $210."
+      }
+    },
+    {
+      "id": "PAY-013",
+      "name": "Differential with HOURS_IN_WINDOW (night window overlap)",
+      "type": "WINDOW_DIFFERENTIAL",
+      "input": {
+        "shiftHours": 12,
+        "shiftStartLocal": "15:00",
+        "shiftEndLocal": "03:00+1",
+        "baseRate": 35.00,
+        "differentials": [
+          {
+            "type": "NIGHT",
+            "calc": { "mode": "PERCENT", "value": 10 },
+            "appliesTo": "HOURS_IN_WINDOW",
+            "window": { "startLocal": "22:00", "endLocal": "06:00" }
+          }
+        ],
+        "overtimeRules": [],
+        "dailyHours": 12,
+        "weeklyHours": 36
+      },
+      "expected": {
+        "regularPay": 420.00,
+        "nightDiff": 17.50,
+        "overtimePay": 0.00,
+        "total": 437.50,
+        "breakdownLines": 2,
+        "note": "12h shift 15:00->03:00+1. Night window 22:00->06:00 (wraps midnight, 8h). Half-open overlap with the shift = 5h (22:00-03:00). Night diff: 5h x $35 x 10% = $17.50."
+      }
+    },
+    {
+      "id": "PAY-014",
+      "name": "Multi-shift weekly OT: 3 shifts totaling 42h, WEEK threshold 40h",
+      "type": "WEEKLY_OT_ALLOCATION",
+      "input": {
+        "rule": "Weekly OT attributed to last shifts in chronological order (LIFO)",
+        "overtimeRules": [
+          { "thresholdHours": 40, "period": "WEEK", "multiplier": 1.5 }
+        ],
+        "baseRate": 35.00,
+        "shifts": [
+          {
+            "id": "shift-mon",
+            "shiftDate": "2026-09-07",
+            "startTime": "07:00",
+            "endTime": "21:00",
+            "shiftHours": 14,
+            "dailyHours": 14,
+            "weeklyHours": 14
+          },
+          {
+            "id": "shift-wed",
+            "shiftDate": "2026-09-09",
+            "startTime": "07:00",
+            "endTime": "21:00",
+            "shiftHours": 14,
+            "dailyHours": 14,
+            "weeklyHours": 28
+          },
+          {
+            "id": "shift-fri",
+            "shiftDate": "2026-09-11",
+            "startTime": "07:00",
+            "endTime": "21:00",
+            "shiftHours": 14,
+            "dailyHours": 14,
+            "weeklyHours": 42
+          }
+        ]
+      },
+      "expected": {
+        "weeklyTotalHours": 42,
+        "weeklyOvertimeHours": 2,
+        "allocation": {
+          "shift-mon": { "regularHours": 14, "overtimeHours": 0, "regularPay": 490.00, "overtimePay": 0.00, "total": 490.00 },
+          "shift-wed": { "regularHours": 14, "overtimeHours": 0, "regularPay": 490.00, "overtimePay": 0.00, "total": 490.00 },
+          "shift-fri": { "regularHours": 12, "overtimeHours": 2, "regularPay": 420.00, "overtimePay": 105.00, "total": 525.00 }
+        },
+        "weeklyTotalPay": 1505.00,
+        "note": "3 shifts x 14h = 42h total. WEEK threshold 40h -> 2h OT. LIFO allocation: OT assigned to last shift (Fri). Mon: 14h reg=$490. Wed: 14h reg=$490. Fri: 12h reg=$420 + 2h OT=$105 = $525. Total=$1505."
+      }
+    }
+  ]
+}

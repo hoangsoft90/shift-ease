@@ -1,0 +1,74 @@
+# Debug APK build (RC review 2026-09-10 — closes the CI side of the
+# mobile_readiness unblock list; device rows still need a real device).
+#
+# Builds a DEBUG-signed APK (no keystore secrets needed) so the user can
+# install it on a device and work through the 15-row verification matrix in
+# doc/mobile_readiness.md. NOT a store artifact — release/AAB signing is a
+# later step (android-release-signing skill territory).
+#
+# Version matrix per the flutter-android-build skill (proven pairing):
+#   JDK 17 (temurin) + Gradle 9.3.1 (wrapper already pinned) + AGP 9.1.0 +
+#   Kotlin 2.4.0 (settings.gradle.kts already pinned). The project's gradle
+#   files already match — this workflow only needs the right Java + Flutter.
+#
+# Matrix rows this enables (see doc/mobile_readiness.md): fresh install (1),
+# migration (2), encrypted DB open (3) and re-key recovery (4) — the SQLCipher
+# native lib ships inside this APK via the package:sqlite3 build hook —
+# reminder permission (5), reminder after restart (6), reboot (7), timezone
+# (8), DST (9), backup/restore (10), CSV import (11), override (12), PayRule
+# (13), lifecycle (14).
+
+name: Build Debug APK
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-debug-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build-debug-apk:
+    name: "Debug APK (device matrix artifact)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17 (temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Show toolchain versions
+        run: flutter doctor -v
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (fail fast before Gradle)
+        run: flutter analyze --fatal-warnings
+
+      - name: Run the full test suite (no APK from a red suite)
+        run: flutter test test/ --reporter compact
+
+      # --debug: debug-signed, installable on any device/emulator, no
+      # keystore secrets required. Minify/R8 not applicable to debug.
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shiftease-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
