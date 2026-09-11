@@ -1,7 +1,8 @@
-# ShiftEase — Danh mục tính năng (App + UI)
+# ShiftEase — Danh mục tính năng (App + UI) — REV 2026-09-11
 
-> Nguồn: `plan1_final_v2.md` (spec đã khóa) + `plan2.md` (kỹ thuật chi tiết) + trạng thái code hiện tại.
-> Ký hiệu trạng thái: ✅ Đã implement | 🔧 Đang implement | ⏳ Đã chốt thiết kế, chưa code | 📋 Đã lên kế hoạch (P1/P2/P3)
+> Cập nhật: 2026-09-11 — viết lại theo **trạng thái code thật trên disk** (RC complete: app shell, engines, import, pay, encryption, ads, Sentry, CI).
+> Mọi mục ✅ đều có file/thẩm chứng trên disk + test backing (328/328 pass tại thời điểm ghi).
+> Ký hiệu: ✅ Đã implement (có test) · 🟡 Implement một phần · ⏳ Chưa implement (backlog)
 
 ---
 
@@ -11,195 +12,195 @@
 |---|---|
 | Định vị | **Personal Operating System for Shift Workers** — 3 trụ cột: Work – Life – Money |
 | Target persona | Nurse/Healthcare 25–45, Mỹ/Anh/Đức, ca xoay 3 kíp, đa nguồn thu nhập, có gia đình |
-| Phạm vi MVP | Mỹ, Anh, Đức |
-| Đối thủ | Supershift, MyShiftPlanner (pattern/roster = table stakes, không phải USP) |
-| 3 trục differentiation | (1) Nhập liệu nhanh, (2) Correctness Contract (tính đúng về mặt kỹ thuật), (3) UX đơn giản |
-| Monetization | Free / Pro; Lifetime $39.99 ưu tiên giai đoạn đầu |
-| Hook marketing | *"Screenshot your hospital roster. ShiftEase does the rest."* / *"Know when you're working, when you're free, and what you'll earn."* / *"Your shifts. Your life."* |
+| 3 trục differentiation | (1) Nhập liệu nhanh, (2) Correctness Contract (tính đúng), (3) UX đơn giản |
+| Monetization | **AdMob banner** đã tích hợp (`test_ads=true` — chỉ Google test ads, chưa live) + kế hoạch Free/Pro Lifetime $39.99 (chưa implement) |
+| Platform | Android (targetSdk 36, minSdk 24) + iOS; offline-first, local-only |
+| Trạng thái build | RC 1.0.0+1 · CI 2 workflows (ShiftEase CI 8 jobs + Build Debug APK) · github.com/hoangsoft90/shift-ease |
 
 ### Correctness Contract (áp dụng mọi module)
 
-> Cùng input hợp lệ + cùng timezone database version + cùng pay rule version → kết quả **deterministic**.
-> Không silent đưa ra kết quả khi input/rule không đủ → phải báo **"Unable to calculate accurately"** kèm lý do.
-> Triết lý: *"Không biết" tốt hơn "tính sai"*. Mọi số tiền hiển thị kèm nhãn **"Ước tính — không phải bảng lương chính thức"**.
+> Cùng input hợp lệ + cùng timezone DB version + cùng pay rule version → kết quả **deterministic**.
+> Thiếu input/rule → KHÔNG đoán: báo **"Unable to calculate accurately"** kèm lý do (`unavailable` trong income, dialog DST, recovery screen).
+> Triết lý: *"Không biết" tốt hơn "tính sai"*. Mọi số tiền kèm nhãn **"Ước tính — không phải bảng lương chính thức"**.
 
 ---
 
-## 2. Trạng thái tổng quan
+## 2. Tính năng đã implement
 
-| Khối | Trạng thái | Chi tiết |
+### A. Time Engine — thời gian/DST (`lib/core/time/`, ✅)
+
+| # | Tính năng | Chi tiết |
 |---|---|---|
-| `core/time` | ✅ Implement | `lib/core/time/` — 24 unit tests pass |
-| `core/pattern` | ✅ Implement | `lib/core/pattern/` — 31 engine tests + 5 property tests + 4 integration tests pass |
-| `core/money` | ⏳ Chưa code | Đã có golden test suite `test/golden/money_engine_cases.json` (13 cases PAY-001→014) |
-| Import pipeline | ⏳ Chưa code | Đã có `test/golden/import_pipeline_cases.json` (8 cases IMPORT-001→008) |
-| Golden tests (Time) | ✅ | `test/golden/time_engine_cases.json` (20 cases) |
-| UI / features / domain / data / platform | ⏳ Chưa code | Kiến trúc đã chốt trong plan2 §1.1 |
-| CI | ✅ | `.github/workflows/test.yml` — 5 jobs + gate rule |
+| A1 | Civil Time Architecture | Local Civil Time (recurrence/UI) ↔ UTC instant (sort/reminder) ↔ elapsed duration (pay) — tách bạch 3 khái niệm |
+| A2 | Resolve local→UTC | Overnight (`endHour < startHour`) tự hiểu là sang ngày hôm sau; timezone per-job (validate qua `validateTimezone`) |
+| A3 | Duration từ UTC (INV-002) | Ca bắc DST spring-forward = 7h, fall-back = 9h — không trừ giờ local |
+| A4/A5 | DST non-existent / ambiguous | Không tự quyết: `NONEXISTENT_LOCAL_TIME` / `AMBIGUOUS_LOCAL_TIME` + 2 candidates → UI dialog (`dst_resolution_dialog.dart`, `DstCandidate`/`DstResolutionOutcome`) |
+| A6 | Ambiguous end-time | Xử lý y hệt start (không auto-select) |
+| A7 | Timezone retention (INV-007) | Đổi timezone thiết bị không đổi giờ ca đã lưu |
+| A8 | Recurrence theo local time (INV-003) | Ca 22:00 xuyên đêm DST không lệch giờ hiển thị |
+| A9 | Timezone database | `initializeTimezoneDatabase()` chạy trước mọi resolve (tz data đóng gói trong app) |
 
----
+### B. Pattern → Occurrence → Override (`lib/core/pattern/`, ✅)
 
-## 3. Tính năng theo nhóm
-
-### A. Time Engine — Độ chính xác thời gian (✅ core/time)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| A1 | **Civil Time Architecture** | 3 khái niệm tách bạch: Local Civil Time (cơ sở recurrence/UI), UTC Instant (sắp xếp/reminder), Elapsed Duration (đầu vào Pay Engine) | P0 | ✅ |
-| A2 | **Resolve local → UTC** | Chuyển đổi local civil time sang UTC instant, có xử lý overnight (`+1` / endHour < startHour) | P0 | ✅ |
-| A3 | **Tính duration từ UTC** (INVARIANT-002) | Duration luôn từ `utcEnd - utcStart`, không trừ giờ local — ca bắc DST spring-forward = 7h, fall-back = 9h | P0 | ✅ |
-| A4 | **DST non-existent time** (D4) | Giờ không tồn tại (spring-forward) → **không tự quyết**, trả lỗi `NONEXISTENT_LOCAL_TIME` → UI hiện dialog | P0 | ✅ (engine) |
-| A5 | **DST ambiguous time** (D4) | Giờ bị lặp (fall-back) → trả `AMBIGUOUS_LOCAL_TIME` kèm danh sách 2 options (EDT/EST...) → UI hiện dialog cho user chọn | P0 | ✅ (engine) |
-| A6 | **Ambiguous end-time** | End time bị lặp cũng không auto-select — xử lý y hệt start time (sửa bug DST-008) | P0 | ✅ |
-| A7 | **Timezone retention** (INVARIANT-007) | Occurrence giữ nguyên timezone gốc kể cả khi user đổi timezone thiết bị | P0 | ✅ |
-| A8 | **Recurrence theo local time** (INVARIANT-003) | Ca 22:00 chạy xuyên đêm DST không bị lệch giờ hiển thị | P0 | ✅ |
-| A9 | **Golden Test Suite** | `time_engine_cases.json`: DST Mỹ/UK/Úc, southern hemisphere, ranh giới tháng/năm, error cases, invariant cases | P0 | ✅ |
-| A10 | **DST resolution dialog (UI)** | Khi giờ không tồn tại/bị lặp: dialog xác nhận, user chọn diễn giải — **không tự làm tròn/đoán** | P0 | ⏳ (UI chưa code) |
-
-### B. Pattern → Occurrence → Override (✅ core/pattern)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| B1 | **Shift Template** | Chỉ chứa time/UI: `startTime`, `endTime`, `breakDurationMinutes`, `color` — **không chứa pay** (INVARIANT-005, D5) | P0 | ✅ (type) |
-| B2 | **Shift Pattern** | Cycle lặp: `FIXED_CYCLE` (4-on/4-off, 2-2-3, DuPont) + chừa `ALTERNATING_WEEKS` / `CUSTOM`; sequence chứa `null` = OFF day | P0 | ✅ |
-| B3 | **Project occurrences** | Sinh baseline occurrences từ pattern trong date range; OFF day không sinh ca; template thiếu → lỗi `MISSING_TEMPLATE` (không silent skip) | P0 | ✅ |
-| B4 | **Pattern versioning** (D1) | Đổi roster từ ngày X → tạo pattern bản mới (`effectiveFrom`/`effectiveUntil`), **không mutate bản cũ** | P0 | ✅ |
-| B5 | **Override — 6 operations** (D2) | `CREATE` (thêm ca, VD ca overtime) / `UPDATE` (đổi giờ/template) / `DELETE` (OFF, hủy ca) / `REPLACE` (Day→Night) / `SPLIT` (1 ca → nhiều phần) / `SWAP` (hoán đổi 2 ca) | P0 | ✅ (5/6 — UPDATE còn lỗi P3: chưa áp đổi giờ) |
-| B6 | **Effective Schedule = baseline + overrides** | Render theo yêu cầu, không lưu cứng; đánh dấu `source: baseline/override/created` | P0 | ✅ |
-| B7 | **Override isolation** (INVARIANT-001) | Sửa occurrence #N không đổi pattern, không ảnh hưởng occurrence #N+1 trở đi | P0 | ✅ (property test) |
-| B8 | **Override reason** | `reason: SWAP / OVERTIME / LEAVE / CUSTOM` — ghi chú lý do sửa ca | P0 | ✅ (type) |
-| B9 | **Pattern builder UI** | Tạo pattern 4-on/4-off, 2-2-3, DuPont + **preview** schedule trước khi lưu | P0 | ⏳ (UI chưa code) |
-| B10 | **Override UI** | Edit/delete ca từ lịch; split/swap UI mượt (P2) | P0/P2 | ⏳ (UI chưa code) |
-
-### C. Pay Engine — Tiền (⏳ core/money chưa code, đã có golden tests)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| C1 | **PayRule versioned** (D6) | Base rate + differentials + overtime rules, theo `jobId`, `effectiveFrom/Until` | P0 | ⏳ |
-| C2 | **PayBreakdown — Cách B** | Tách bạch: `Regular Pay` (giờ không phải OT) + `Differentials` + `Overtime Pay` — **không double-count** | P0 | ⏳ |
-| C3 | **Pluggable Differential** | `NIGHT / WEEKEND / HOLIDAY / HAZARD / CALLBACK / CUSTOM`; mode `PERCENT/FLAT`; appliesTo `ALL_HOURS_IN_SHIFT` hoặc `HOURS_IN_WINDOW` (window start/end local) | P0 | ⏳ |
-| C4 | **Overtime multi-rule** | `SHIFT/DAY/WEEK` threshold + multiplier; nhiều rule cùng lúc → lấy **max()** giữa các rule, không cộng dồn | P0 | ⏳ |
-| C5 | **Weekly OT Allocation — LIFO** (5.7) | Tuần vượt ngưỡng → OT gán cho **ca cuối cùng theo thứ tự thời gian**; tràn sang ca trước nếu ca cuối không đủ giờ; minh họa PAY-014 (3×14h = 42h → Fri nhận 2h OT, tổng $1,505) | P0 | ⏳ |
-| C6 | **PayRule Snapshot** (INVARIANT-006) | Historical earnings = snapshot bất biến; PayRule mới **không rewrite** earnings cũ | P0 | ⏳ |
-| C7 | **PayRuleTemplate Library** (5.6) | Template theo ngành/quốc gia: US-CA (SHIFT>8h + WEEK>40h ×1.5), US-NY, US-TX, UK NHS (WEEK>39h), DE (DAY>8h + WEEK>40h); night/weekend/holiday differential mặc định | P0 | ⏳ |
-| C8 | **Income breakdown dashboard** | Chi tiết: base + từng differential + OT + tổng, kèm disclaimer "Ước tính" | P1 | ⏳ |
-| C9 | **Golden Test Suite (Money)** | `money_engine_cases.json`: base pay, từng differential, OT theo SHIFT/DAY/WEEK, multi-differential + OT, window differential, versioning, template US-CA | P0 | ✅ (test data) |
-| C10 | **Từ chối tính khi thiếu config** | Chưa cấu hình work-week boundary / state OT rule → hiện *"Cannot determine overtime because: ..."*, không đoán | P0 | ⏳ |
-
-### D. Calendar & Màn hình chính (P0 — UI chưa code)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| D1 | **Today screen** | Ca hôm nay + ca tiếp theo, giờ nghỉ trước ca sau, thu nhập hôm nay/tuần này (thuần hiển thị, không AI) | P0 | ⏳ |
-| D2 | **Calendar view** | Week + Month; hiển thị ca theo local time | P0 | ⏳ |
-| D3 | **Quick Add (1-tap template)** | Thêm ca nhanh từ template có sẵn — ưu tiên nhập liệu **bậc 1** | P0 | ⏳ |
-| D4 | **Add Shift UI** | Chọn template/job, ngày, giờ; xử lý overnight và DST dialog | P0 | ⏳ |
-| D5 | **Multi-job cơ bản** | Mỗi job có bộ ShiftTemplate + PayRule + timezone riêng | P0 | ⏳ |
-| D6 | **.ics export (offline)** | Export lịch offline, không cần server (D8 — P0) | P0 | ⏳ |
-| D7 | **Basic notifications** | Thông báo ca bắt đầu | P0 | ⏳ |
-| D8 | **Offline-first** (INVARIANT-008) | Calendar core (view/add/edit shifts) hoạt động hoàn toàn offline; không yêu cầu cloud/account | P0 | ⏳ |
-
-### E. Import Pipeline (⏳ chưa code, đã có golden tests)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| E1 | **Smart Paste** | Paste text → regex + heuristics → schedule entries; ưu tiên **bậc 2** | P0 | ⏳ |
-| E2 | **CSV/Excel import** | UI mapping cột → parser; ưu tiên **bậc 3** | P0/P1 | ⏳ |
-| E3 | **OCR + PDF import** | Tesseract/PaddleOCR → regex parser; **có gate**: chỉ build kiến trúc lớn sau spike-test 20–30 roster thật (M4.5) | P1 | ⏳ |
-| E4 | **Confidence Scoring** | Từng candidate shift có `HIGH/MEDIUM/LOW` theo date format, time format, template match, shift type | P0/P1 | ⏳ |
-| E5 | **User Review UI (bắt buộc)** (D7, INVARIANT-004) | Mỗi candidate: `[✓ Accept] [✎ Edit] [✗ Reject]` + Confidence bar; bulk "Accept All High", "Review Remaining"; **không auto-commit** | P0/P1 | ⏳ |
-| E6 | **ImportSession audit** | Lưu raw extraction + candidates + committed IDs → truy vết nguồn gốc mọi ca ("Tại sao Sep 03 là Night?") | P1 | ⏳ |
-| E7 | **Re-import "What changed?"** | So sánh roster mới vs cũ: `added/removed/modified` + impact (hours, income, availability) | P1 | ⏳ |
-| E8 | **Pattern auto-detection** | Tự phát hiện pattern từ lịch đã import | P1/P2 | ⏳ |
-| E9 | **State machine import** | `IDLE → PARSING → EXTRACTED/ERROR → REVIEWING → COMMITTED`; parse fail → hiện lỗi, user sửa lại input | P0 | ⏳ |
-| E10 | **Golden Test Suite (Import)** | `import_pipeline_cases.json`: happy path, INVARIANT-004 (no auto-commit), commit flow, CSV, re-import diff, medium confidence, parse failure, bulk accept | P0 | ✅ (test data) |
-
-### F. Sự kiện ngoài ca làm (Calendar Event Model)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| F1 | **CalendarEvent supertype** | `type: SHIFT/TIME_OFF/PERSONAL/AVAILABILITY_BLOCK`; `source: user/partner/colleague`; `status: pending/accepted/declined`; `refId` | P0/P2 | ⏳ |
-| F2 | **TimeOff** | PTO / Sick / Holiday / Unpaid / Personal Leave; nhiều ngày; `halfDay: NONE/AM/PM`; notes | P0/P1 | ⏳ |
-| F3 | **PersonalEvent** | Sự kiện cá nhân: title, start/end, location, recurrence (DAILY/WEEKLY/MONTHLY) | P0/P1 | ⏳ |
-| F4 | **AvailabilityBlock** | Khối FREE/BUSY/RECOVERY → dùng cho Availability Finder | P1 | ⏳ |
-| F5 | **Availability Finder** | Tìm khung thời gian rảnh dựa trên ca + availability blocks + overlay | P1 | ⏳ |
-
-### G. Sharing & Privacy (P1/P2)
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| G1 | **Granular sharing — 3 modes** | `FULL` (ca + giờ + loại ca — gia đình/quản lý) / `BUSY_ONLY` (chỉ free/busy — đồng nghiệp) / `RECOVERY` (ca + recovery windows sau night shift) | P1 | ⏳ |
-| G2 | **Share link** | Link anonymous UUID; người nhận chỉ thấy nội dung theo mode; revoke bất cứ lúc nào | P1 | ⏳ |
-| G3 | **Partner/Family overlay** | Overlay lịch gia đình read-only lên lịch user (Privacy mode: Busy/Free/Recovery) | P1 | ⏳ |
-| G4 | **Partner reverse-sharing** | Đối tác đề xuất sự kiện → user duyệt (pending/accepted/declined) | P2 | ⏳ |
-| G5 | **Colleague sharing** | Read-only + "open to swap" (không approval flow) | P2 | ⏳ |
-| G6 | **Dynamic Webcal** (D8) | Link tự cập nhật, subscribe được; server + token (64 chars random, expire 90 ngày, revoke trong Settings, 410 Gone khi hết hạn) | P1+ | ⏳ |
-| G7 | **Data encryption** | SQLCipher local; AES-256-GCM E2E cho cloud sync + backup export (password) | P1+ | ⏳ |
-
-### H. P2/P3 — Moat & Stickiness
-
-| # | Tính năng | Mô tả | Phase | Trạng thái |
-|---|---|---|---|---|
-| H1 | **Shift change detection** | Employer đổi lịch → cảnh báo ảnh hưởng availability/thu nhập | P2 | 📋 |
-| H2 | **Wellness nhẹ (rule-based)** | Cảnh báo chuỗi ca dài, recovery window sau night shift, thống kê giờ làm/nghỉ | P2 | 📋 |
-| H3 | **Widgets** | Home screen widget hiển thị ca tiếp theo | P1 | 📋 |
-| H4 | **Cloud backup** | Optional, E2E encrypted | P1 | 📋 |
-| H5 | **Health AI** (circadian, nutrition, workout) | Ngoài phạm vi MVP | P3 | 📋 |
-| H6 | **B2B / Team management** (duyệt nghỉ, admin, báo cáo) | Ngoài phạm vi MVP | P3 | 📋 |
-
----
-
-## 4. Danh mục màn hình UI
-
-| Màn hình | Nội dung chính | Phase |
+| # | Tính năng | Chi tiết |
 |---|---|---|
-| **Today** | Ca hôm nay, ca tiếp theo, đếm ngược giờ nghỉ trước ca sau, thu nhập hôm nay/tuần | P0 |
-| **Calendar (Week/Month)** | Lưới lịch, ca theo local time, chuyển view week ↔ month | P0 |
-| **Quick Add / Add Shift** | 1-tap từ template; form thêm ca (job, template, ngày, giờ); DST dialog khi cần | P0 |
-| **Pattern Builder** | Chọn cycle (4-on/4-off, 2-2-3, DuPont), cấu hình sequence, **preview** schedule, ngày hiệu lực (versioning) | P0 |
-| **Occurrence Edit** | Edit giờ, đổi template (UPDATE/REPLACE), xóa (DELETE), tách ca (SPLIT), hoán đổi (SWAP) | P0/P2 |
-| **Import** | Chọn nguồn (paste/CSV/ảnh/PDF); **Review UI** từng candidate với Confidence bar + Accept/Edit/Reject + bulk actions | P0/P1 |
-| **Re-import Diff** | "What changed?" — danh sách added/removed/modified + tác động thu nhập/availability | P1 |
-| **Jobs** | Quản lý nhiều job: mỗi job có template, pay rule, timezone riêng | P0 |
-| **Pay Rules** | Cấu hình base rate, differentials, overtime rules; chọn từ **template library** (US/UK/DE) | P0 |
-| **Income breakdown** | Breakdown base + differential + OT + tổng (kèm "Ước tính") | P1 |
-| **Availability Finder** | Tìm khung rảnh dựa trên ca + availability blocks | P1 |
-| **Sharing** | Chọn mode (FULL/BUSY_ONLY/RECOVERY), tạo/revoke link | P1 |
-| **Settings** | Jobs, pay rules, sharing, webcal token management, backup | P0/P1 |
-| **DST Dialog** | Spring-forward: báo giờ không tồn tại; Fall-back: 2 options (VD: chọn EDT hay EST) | P0 |
-| **Unable to calculate** | Hiện lý do cụ thể khi thiếu config pay (work-week boundary, state OT rule) | P0 |
+| B1 | Shift Template | Time/UI only: tên/mã/màu/start/end/break — **KHÔNG pay** (INV-005); overnight = end < start |
+| B2 | Shift Pattern | `FIXED_CYCLE` (4-on/4-off, 2-2-3, DuPont, sequence tự khai, `null` = OFF); pattern builder có **preview 14 ngày đầu** trước khi lưu |
+| B3 | Project occurrences | Sinh baseline theo date range; template thiếu → lỗi `MISSING_TEMPLATE` (không silent skip) |
+| B4 | Roster re-versioning (D1) | "Đổi roster từ ngày X" = `changeRosterFrom` **atomic transaction**: đóng pattern cũ (`effectiveUntil`), tạo bản mới (`effectiveFrom`), ca cũ giữ nguyên |
+| B5 | Override — 6 operations (D2) | CREATE / UPDATE / DELETE / REPLACE / SPLIT / SWAP — mỗi mutation ghi **1 Override** vào append-only log (`override_actions.dart` → `applyOverride`) |
+| B6 | Effective Schedule | Baseline + overrides render runtime; `source: baseline/override/created` |
+| B7 | Override isolation (INV-001) | Sửa ca #N không đụng pattern hay ca #N+1 (property test bảo vệ) |
+| B8 | Override reason | SWAP / OVERTIME / LEAVE / CUSTOM |
 
----
+### C. Pay / Money (`lib/core/money/` + `lib/features/pay/` + `lib/features/income/`, ✅)
 
-## 5. Luồng (Flows) quan trọng
-
-1. **Thêm ca qua DST** — local time rơi vào giờ không tồn tại/bị lặp → dialog chọn diễn giải → resolve UTC → tạo occurrence.
-2. **Sửa ca (Override)** — user edit → tạo `Override` với operation rõ ràng → render lại Effective Schedule; pattern **không bị mutate** (INVARIANT-001).
-3. **Đổi roster từ ngày X** — đóng pattern cũ (`effectiveUntil = X-1`), tạo bản mới (`effectiveFrom = X`), re-project từ X; ca trước X giữ nguyên (D1).
-4. **Import roster** — parse → candidates + confidence → **user review bắt buộc** → commit (INVARIANT-004); ImportSession lưu để audit + re-import diff.
-5. **Tính lương** — active PayRule tại ngày ca → duration từ UTC → regular hours + differentials + OT (multi-rule max, WEEK theo LIFO) → snapshot lưu vào occurrence (INVARIANT-006).
-6. **Share lịch** — chọn mode → link anonymous UUID → người nhận xem theo mode → revoke khi cần.
-
----
-
-## 6. Invariants được bảo vệ
-
-| # | Invariant | Module |
+| # | Tính năng | Chi tiết |
 |---|---|---|
-| INVARIANT-001 | Pattern never mutates because an occurrence is edited | pattern |
-| INVARIANT-002 | Duration luôn từ resolved UTC instants | time |
-| INVARIANT-003 | Local civil time là cơ sở recurrence | time |
-| INVARIANT-004 | Imported data không bao giờ commit nếu chưa user confirm | import |
-| INVARIANT-005 | ShiftTemplate chỉ chứa time/UI — không pay semantics | pattern/money |
-| INVARIANT-006 | Historical pay estimates là snapshot bất biến | money |
-| INVARIANT-007 | Occurrence giữ nguyên timezone gốc | time |
-| INVARIANT-008 | Core calendar hoạt động hoàn toàn offline | platform |
+| C1 | PayRule versioned (D6) | Base rate + differentials + OT rules theo job, effectiveFrom/Until |
+| C2 | PayBreakdown — Cách B | Regular + Differentials + Overtime tách bạch, không double-count |
+| C3 | Differentials pluggable | NIGHT/WEEKEND/HOLIDAY/HAZARD/CALLBACK/CUSTOM; PERCENT/FLAT; window hoặc all-shift |
+| C4 | OT multi-rule | SHIFT/DAY/WEEK threshold + multiplier; nhiều rule → **max()**, không cộng dồn |
+| C5 | Weekly OT LIFO | Tuần vượt ngưỡng → OT gán ca cuối theo thời gian, tràn ngược nếu thiếu |
+| C6 | Snapshot (INV-006) | Earnings lịch sử là snapshot bất biến; rule mới không rewrite cũ |
+| C7 | PayRule template library | US-CA/US-NY/US-TX/UK NHS/DE (`payrule_templates.dart`) + **presets UI** (preset = điểm bắt đầu, prefill editor; save tường minh) |
+| C8 | Income estimate + breakdown UI | `estimateIncome` theo This week/This month/custom; thiếu rule → trạng thái **`unavailable`** rõ ràng (C10); màn breakdown full-screen (`income_breakdown_screen.dart`) + thu nhập trên Today |
+| C9 | Disclaimer bắt buộc | Mọi số tiền: "Ước tính — không phải bảng lương chính thức" (test bảo vệ) |
+
+### D. Calendar & màn hình chính (`lib/features/calendar|today|occurrence/`, ✅)
+
+| # | Tính năng | Chi tiết |
+|---|---|---|
+| D1 | Today screen | Ca đang diễn ra/ca tiếp theo + countdown, **khoảng nghỉ trước ca sau**, tổng giờ làm tuần (Mon–Sun từ UTC), thu nhập hôm nay/tuần; auto-refresh khi app resume (`WidgetsBindingObserver`) |
+| D2 | Month calendar | Lưới 6×7 cố định; mỗi cell: số ca + tối đa 2 giờ bắt đầu (local); tap ngày → quick add / occurrence sheet |
+| D3 | Week calendar | Tuần Mon–Sun, default tuần chứa ngày tap; hiển thị ca theo local time |
+| D4 | Quick Add 1-tap | Bottom sheet theo ngày: mỗi template 1 tile = tạo ca với giờ mặc định; "Custom time…" mở form đầy đủ |
+| D5 | Occurrence sheet | View/edit ca; CREATE trên ngày OFF; delete với confirm; DST dialog khi chạm giờ lạ; mọi thay đổi = 1 Override |
+| D6 | Multi-job | Mỗi job: templates + patterns + PayRule + **timezone riêng**; tạo/xoá job từ Jobs screen |
+| D7 | Offline-first (INV-008) | Toàn bộ core chạy local 100%, không cloud/account/network bắt buộc (Sentry + AdMob là 2 ngoại lệ opt-in, xem G) |
+
+### E. Import pipeline (`lib/core/import/` + `lib/features/import/`, ✅)
+
+| # | Tính năng | Chi tiết |
+|---|---|---|
+| E1 | Smart Paste | Paste text tự do → parse + heuristics → candidates |
+| E2 | CSV import (RC §C1) | Paste CSV → preview cột (header + auto-detect) → map cột → parse |
+| E3 | Confidence scoring | HIGH/MEDIUM/LOW theo date format/time format/template match |
+| E4 | Review UI bắt buộc (INV-004) | Mỗi candidate Accept/Edit/Reject; bulk "Accept All High"; **không auto-commit** |
+| E5 | State machine | `IDLE → EXTRACTED → REVIEWING → COMMITTED`; commit tường minh qua dialog "Commit now?"; `commitImport` từ chối EXTRACTED→COMMITTED thiếu review; commit session+occurrences **1 transaction** |
+| E6 | Re-import diff (RC §C2) | Preview what-changes vs committed roster hiện tại: Added/Removed/Modified + impact giờ/thu nhập trước khi commit |
+| E7 | ImportSession audit | Raw text + candidates + committed IDs lưu DB → truy vết nguồn gốc ca |
+
+### F. Data, bảo mật & khôi phục (`lib/core/db/`, `lib/features/security/`, ✅)
+
+| # | Tính năng | Chi tiết |
+|---|---|---|
+| F1 | SQLCipher encryption (P7.2) | DB mã hoá thật (SQLCipher 4.18.0 qua build hook `source: sqlcipher`); opener **fail-closed** — không key không mở, không plain fallback; `tool/cipher_proof.dart` chứng minh trong CI |
+| F2 | Master key | Sinh lần đầu, lưu Android Keystore (EncryptedSharedPreferences) / iOS Keychain (`SecureSecretStore`); key không vào log/backup |
+| F3 | Recovery screen phân loại | Lỗi được phân đúng loại: filesystem (storage problem — KHÔNG bảo mất key) / secure storage / cipher (wrong key) / unexpected — mỗi loại có hướng dẫn riêng (`lib/main.dart` `_LockedApp`) |
+| F4 | DB path đúng mobile (P0 fix) | Mobile = `getApplicationSupportDirectory()` qua path_provider (KHÔNG BAO GIỜ `HOME ?? '.'` — bug errno 30 đã sửa, 7 test bảo vệ); desktop = `$HOME/.shiftease`; `SHIFTEASE_DB` override |
+| F5 | Schema v3 + migration | Version boundary có test (6-op replay); schema version hiển thị trong Settings |
+| F6 | Backup | Full-data JSON (schema + checksum) vào app-support dir; Settings → Backup |
+| F7 | Restore | Validate → preview → confirm → restore; corrupt/checksum sai bị từ chối; restore trên DB mã hoá (encrypted round-trip test) |
+| F8 | Delete all data | Xoá DB + local data, confirm 2 lần ("Are you absolutely sure?"); gỡ app = Keystore entry xoá theo → DB không đọc lại được |
+| F9 | Write error boundary | Mọi write path (override/import/pay/backup/ICS) qua `runWrite` — exception thành message user, không crash, data rollback (INV-008 an toàn) |
+| F10 | Append-only integrity | Override log append-only; audit adversarial test (rc_adversarial_test.dart) |
+
+### G. Platform & dịch vụ (`lib/features/notifications|export|ads/`, ✅)
+
+| # | Tính năng | Chi tiết |
+|---|---|---|
+| G1 | Shift reminder | Local notification trước ca (default lead 60 phút, cấu hình được); skip ca đã trong lead window; 1 notification id fixed → reschedule thay thế; auto-reschedule khi app resume; Android 13+ xin `POST_NOTIFICATIONS` runtime; inexact allow-while-idle (không cần quyền special) |
+| G2 | ICS export | Per-job từ job screen; VEVENT chuẩn (UID + SUMMARY), file JSON/ICS nằm app-support dir (không UI share — ghi rõ trong privacy) |
+| G3 | Sentry crash reporting | `sentry_flutter ^9.28`, DSN config, **error-only: PII off, traces off**; wrap toàn app (cả lỗi async trong bootstrap) |
+| G4 | AdMob banner | `google_mobile_ads ^9.1.0`; banner pin dưới app shell (mọi màn), self-hiding khi disable/chưa load; **UMP consent trước init** (EEA/UK); mọi ad call guard — ads không bao giờ làm app lỗi; **`admob.test_ads: true`** = chỉ Google test unit IDs (tránh LIMIT); production placeholder ⇒ ads tự tắt (không fallback test ID) |
+| G5 | App icon | Custom icon (tool/make_icon.py): Android mọi density + adaptive (bg `#1E3A5F`) + full iOS AppIcon set |
+| G6 | Cleartext HTTP | `usesCleartextTraffic=true` + `INTERNET` (yêu cầu tường minh của owner; consumer: Sentry + AdMob) |
+
+### H. Chất lượng & CI (✅)
+
+| # | Mục | Chi tiết |
+|---|---|---|
+| H1 | Test suite | **328/328 pass** (time/pattern/money/import/db/domain/ui/features/ads + property + integration + golden JSON time/money/import) |
+| H2 | CI | `ShiftEase CI` 8 jobs (analysis + dependency rule + per-engine + golden cross-check Node + persistence SQLCipher proof + full suite gate) · `Build Debug APK` (artifact `shiftease-debug-apk`, debug-signed, gradle trực tiếp) |
+| H3 | Static rule | `lib/core` không import domain/features/app; `lib/domain` không import features/app (CI enforce) |
+| H4 | Build | compileSdk/targetSdk **36** (Play 31/8/2026), minSdk 24, JDK 17 + Gradle 9.3.1 + AGP 9.1.0 + Kotlin 2.4.0, desugaring 2.1.4 |
+| H5 | Honesty docs | `doc/release/privacy.md` (audit basis: Sentry + AdMob, checklist trước khi live ads), `monitoring.md`, `final_release_gate.md` — device/store legs ghi NOT RUN trung thực |
 
 ---
 
-## 7. Ghi chú trạng thái hiện tại
+## 3. Danh mục màn hình UI (đã implement)
 
-- **Đã code (Bước 1–3):** `core/time` (A1–A9) và `core/pattern` (B1–B7, trừ lỗi P3 ở B5 — UPDATE chưa áp đổi giờ). Tổng 55 tests pass (24 time + 22 pattern + 5 property + 4 integration).
-- **Golden test suites:** đã có đủ 3 file JSON (time 20 cases, money 13 cases, import 8 cases) + script `scripts/verify_all_cases.mjs` + CI `.github/workflows/test.yml`.
-- **Chưa code:** toàn bộ UI, `core/money`, import pipeline, domain/data/platform layers.
-- **Roadmap:** M0 Foundation (core engines) → M1 Basic Calendar → M2 Import → M3 Multi-Job + Pay → M4 Export & Share → **M4.5 OCR Spike Test (gate: ≥70% dates, ≥60% shift types, nếu không đạt thì không làm M5)** → M5 OCR Import → M6 Cloud.
+| Màn hình | File | Nội dung thật trên màn hình |
+|---|---|---|
+| **Jobs (home)** | `features/jobs/jobs_screen.dart` | AppBar "ShiftEase — Jobs" + icon Settings; danh sách job (tên, timezone); FAB "+ New job" (dialog tên job); tap job → Job Detail |
+| **Job Detail** | `features/jobs/job_detail_screen.dart` | Sections: Shift Templates (thêm/sửa qua `TemplateEditDialog`: tên, mã, màu, start/end, break — không có field pay), Shift Patterns (danh sách + FAB "New pattern"), Pay rule (nếu pay engine bật), action **ICS export**; nút mở Week Calendar + Pattern Builder |
+| **Today** | `features/today/today_screen.dart` | AppBar "Today"; card ca hiện tại/tiếp theo + mô tả (countdown tới giờ bắt đầu); card nghỉ giữa ca; tổng giờ làm tuần; thu nhập hôm nay/tuần (tap → Income breakdown); empty states "No jobs yet — create one first." / "No shifts coming up in the next 7 days." |
+| **Month Calendar** | `features/calendar/month_calendar_screen.dart` | Lưới tháng 6×7; cell = số ca + ≤2 giờ bắt đầu local; tap ngày → Quick Add (ngày trống) / Occurrence sheet (có ca) |
+| **Week Calendar** | `features/calendar/week_calendar_screen.dart` | Tuần Mon–Sun, mở mặc định ở tuần chứa ngày được tap từ Job Detail |
+| **Quick Add sheet** | `features/calendar/quick_add_sheet.dart` | Bottom sheet theo ngày: "One tap = shift with the template's default times." — 1 tile/template + "Custom time…" |
+| **Occurrence sheet** | `features/occurrence/occurrence_sheet.dart` | Xem/sửa ca: giờ, template (REPLACE), delete (confirm); CREATE trên ngày OFF; DST dialog khi cần; mọi action = 1 Override qua write guard |
+| **Pattern Builder** | `features/pattern_builder/pattern_builder_screen.dart` | Chọn preset cycle + khai báo sequence (OFF = ô trống); nút **Preview** (dialog "Preview — first 14 days"); Save (disable nếu job chưa có template) |
+| **Import** | `features/import/import_screen.dart` | "Import roster · <job>" — 2 mode: Paste text / CSV (preview cột + map); parse → danh sách candidate (confidence) Accept/Edit/Reject + bulk; **diff card** Added/Removed/Modified trước commit; dialog "Commit now?"; lỗi parse hiện rõ |
+| **Income Breakdown** | `features/income/income_breakdown_screen.dart` | "Income · <job>" — chip This week / This month / Custom range; breakdown base + differential + OT + tổng; trạng thái unavailable kèm lý do; disclaimer "Ước tính — không phải bảng lương chính thức" |
+| **Pay rule dialog** | `features/pay/pay_rule_edit_dialog.dart` + `pay_presets.dart` | "Pay rule (estimate)" — chọn preset làm điểm bắt đầu (prefill), sửa base rate/differentials/OT, save tường minh |
+| **Template dialog** | `features/templates/template_edit_dialog.dart` | "New shift template" / sửa: name, code, color, start "HH:mm", end, break phút; overnight = end < start |
+| **DST dialog** | `features/common/dst_resolution_dialog.dart` | Giờ không tồn tại/bị lặp: giải thích + chọn candidate (không auto-guess) |
+| **Settings** | `features/settings/settings_screen.dart` | Rows: Schema version · Timezone · Permission status (notifications) · Backup (Full-data JSON) · Restore (Choose file → "Restore this backup?") · ICS export (ghi chú per job) · Delete all data (2 confirm) · Encryption status ("Encrypted (key verified)." hoặc lý do) · Data collection · About "ShiftEase — Offline shift calendar — release candidate" · Privacy Policy · Terms |
+| **Recovery screen** | `lib/main.dart` `_LockedApp` | Khi mở DB thất bại — tiêu đề theo loại lỗi ("storage problem"/"locked"/"unexpected error"), summary + guidance riêng từng loại, technical detail; KHÔNG claim mất data |
+| **Ad banner** | `features/ads/ad_banner_widget.dart` | Banner 50dp pin đáy app shell (mọi màn); ẩn khi test-off/chưa load/fail |
+
+Điều hướng: plain `Navigator.push` (không lib điều hướng); injection qua constructor (không service locator). Danh sách này khớp "Danh mục màn hình" spec plan1 — khác duy nhất: **Availability Finder / Sharing screens** chưa implement (backlog §5).
+
+---
+
+## 4. Luồng quan trọng (đã implement)
+
+1. **Khởi động fail-closed** — Sentry init → key từ Keystore/Keychain → `resolveDbPath` (app-support trên mobile) → open DB bằng key (defaultOpener chứng minh SQLCipher) → composeService; failure bất kỳ bước → recovery screen phân loại. Không bao giờ mở DB không key.
+2. **Thêm ca qua DST** — giờ lạ → dialog chọn diễn giải → resolve UTC → Override CREATE.
+3. **Sửa ca (Override)** — edit → 1 Override append-only → render lại; pattern không mutate (INV-001); mọi exception qua write guard thành message.
+4. **Đổi roster từ ngày X** — `changeRosterFrom` 1 transaction: đóng pattern cũ + tạo bản mới; ca trước X nguyên vẹn.
+5. **Import roster** — paste/CSV → parse → review bắt buộc → diff preview → "Commit now?" → commit atomic; audit session lưu DB.
+6. **Tính thu nhập** — active PayRule theo ngày → duration từ UTC → regular + differentials + OT (max/LIFO) → `estimateIncome`; thiếu rule → unavailable + lý do.
+7. **Backup/Restore** — export JSON checksum → validate → preview → confirm → restore (reject corrupt; encrypted round-trip).
+8. **Reminder lifecycle** — schedule cho ca tiếp theo (lead 60') → reschedule + cancel-stale mỗi lần app resume; permission runtime Android 13+.
+
+---
+
+## 5. Invariants được bảo vệ (có test)
+
+| # | Invariant | Nơi bảo vệ |
+|---|---|---|
+| INV-001 | Sửa occurrence không mutate pattern | pattern property test |
+| INV-002 | Duration chỉ từ resolved UTC instants | time tests |
+| INV-003 | Recurrence theo local civil time | time tests |
+| INV-004 | Import không commit khi chưa user review | import engine + UI tests |
+| INV-005 | Template không chứa pay semantics | pattern/money tests |
+| INV-006 | Earnings lịch sử = snapshot bất biến | money tests |
+| INV-007 | Occurrence giữ timezone gốc | time tests |
+| INV-008 | Core calendar offline hoàn toàn | thiết kế + ads/sentry guard test |
+
+---
+
+## 6. CHƯA implement (backlog — trung thực, không claim)
+
+| Nhóm | Mục | Ghi chú |
+|---|---|---|
+| Import mở rộng | OCR/PDF import (M4.5 → M5) | **Gate**: cần spike 20–30 roster thật, threshold ≥70% dates / ≥60% shift types (plan11); spec sẵn |
+| Import mở rộng | Pattern auto-detection | P1/P2 spec |
+| Sự kiện ngoài ca | TimeOff / PersonalEvent / AvailabilityBlock / Availability Finder | Spec F1–F5; chưa code |
+| Sharing | Granular sharing (FULL/BUSY_ONLY/RECOVERY), share link, partner overlay, webcal | Spec G1–G7; chưa code (offline-first hiện tại) |
+| Monetization | Live AdMob (production IDs) — đang `test_ads=true` | Checklist trong `doc/release/privacy.md` §ads; IAP/Pro Lifetime $39.99 chưa code |
+| Cloud | Cloud backup E2E / account | Chưa code (local-only) |
+| Platform | Home-screen widgets; UI share/file-picker cho backup & ICS; localization (hiện UI tiếng Anh) | Chưa code |
+| Release ops | Signed AAB/App Store submission, closed testing | Human legs — BLOCKED theo `result_p9_launch.md` |
+
+---
+
+## 7. Trạng thái verify tại thời điểm ghi (2026-09-11)
+
+- `flutter analyze --no-pub --fatal-infos` → **No issues found**
+- `flutter test test/` → **328/328 pass**
+- `dart run tool/cipher_proof.dart` → **SQLCipher 4.18.0 community**
+- CI: ShiftEase CI (8 jobs) + Build Debug APK — đã green-run trên github.com/hoangsoft90/shift-ease
+- App label `ShiftEase` (Android + iOS), version `1.0.0+1`, ids `com.shiftease.shiftease`
