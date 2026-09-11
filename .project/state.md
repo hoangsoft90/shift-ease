@@ -1,7 +1,7 @@
 # Project State — ShiftEase
 
 > Trạng thái project tại thời điểm cập nhật. File chính thức theo dõi phiên: `.project/working.md`.
-> Cập nhật: 2026-09-11 (**AdMob ads integration** — `google_mobile_ads ^9.1.0`, banner dưới app shell, UMP consent trước init, **`admob.test_ads: true`** = chỉ Google test IDs (tránh LIMIT), production placeholder ⇒ ads tự tắt; minSdk pin 24; privacy.md re-audit lần 3 (2 network consumers: Sentry + AdMob) — 328/328. Trước đó trong ngày: P0 fix mobile DB path (`resolveDbPath` app-support, recovery phân loại lỗi, 322/322); CI-APK session — targetSdk/compileSdk 36, cleartext HTTP + INTERNET, Sentry error-only, icon mới, APK chỉ build trên GH Actions (skill `shiftease-ci-apk`, CI xanh); trước nữa: P9 LAUNCH PREP COMPLETE, KHÔNG claim PRODUCTION LIVE).
+> Cập nhật: 2026-09-11 (**AdMob production Android IDs điền** — app + banner + interstitial + open + rewarded (`ca-app-pub-6917313063209470~…`), vẫn `test_ads=true` → chạy TEST ads trên unit thật; flip sau = ads thật Android ngay, iOS chưa có ID tự tắt; 332/332. Trước đó: AdMob integration (banner + UMP + test mode), P0 fix mobile DB path, CI-APK session (targetSdk 36, Sentry, icon), P8/P9 prep complete — KHÔNG claim PRODUCTION LIVE).
 
 ## 1. Vị trí trên roadmap
 

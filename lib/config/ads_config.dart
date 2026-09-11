@@ -8,10 +8,10 @@
 //     manifests ship the sample APPLICATION_IDs. No real ad traffic, no
 //     invalid-traffic risk, no AdMob account LIMIT. CI/dev/test builds stay
 //     here.
-//   • false → production AdMob unit IDs below are used. If any of them is
-//     still a placeholder (empty string), ads are DISABLED (unit == '') —
-//     the app must never ship real-traffic placeholders like the Google
-//     sample IDs (ca-app-pub-3940256099942544/...) with test_ads=false.
+//   • false → production AdMob unit IDs below are used. Android units are
+//     FILLED (2026-09-11) so flipping the flag serves REAL ads on Android;
+//     iOS units are still empty → iOS ads stay disabled (no crash, no
+//     test-ID fallback).
 //
 // Production placeholders (owner fills from the AdMob console, then flips
 // test_ads to false):
@@ -51,16 +51,23 @@ const String kAdMobTestInterstitialAndroid =
 const String kAdMobTestInterstitialIos =
     'ca-app-pub-3940256099942544/4411468910';
 
-/// Production AdMob IDs — PLACEHOLDERS until the owner creates the AdMob
-/// apps/units. Empty strings by design: with test_ads=false and an empty
-/// unit, [AdUnitIds.banner]/[AdUnitIds.interstitial] return '' and the ad
-/// service disables itself (never ships Google test IDs as real inventory).
-const String kAdMobAndroidAppIdProduction = '';
+/// Production AdMob IDs — **Android FILLED 2026-09-11** (app + banner +
+/// interstitial + open + rewarded). iOS app chưa tạo trên AdMob console →
+/// iOS production IDs để rỗng ('') cho tới khi có: với test_ads=false, iOS
+/// ads sẽ tự TẮT (không crash, không fallback sang test IDs).
+const String kAdMobAndroidAppIdProduction =
+    'ca-app-pub-6917313063209470~6379119743';
 const String kAdMobIosAppIdProduction = '';
-const String kAdMobAndroidBannerUnitProduction = '';
+const String kAdMobAndroidBannerUnitProduction =
+    'ca-app-pub-6917313063209470/7669818989';
 const String kAdMobIosBannerUnitProduction = '';
-const String kAdMobAndroidInterstitialUnitProduction = '';
+const String kAdMobAndroidInterstitialUnitProduction =
+    'ca-app-pub-6917313063209470/5811153858';
 const String kAdMobIosInterstitialUnitProduction = '';
+const String kAdMobAndroidOpenAppUnitProduction =
+    'ca-app-pub-6917313063209470/8158115597';
+const String kAdMobAndroidRewardedUnitProduction =
+    'ca-app-pub-6917313063209470/3866305343';
 
 /// Resolved per-platform ad unit IDs honoring [AppAdsConfig.testAds].
 ///
@@ -78,6 +85,19 @@ class AdUnitIds {
           testI: kAdMobTestInterstitialIos,
           prodA: kAdMobAndroidInterstitialUnitProduction,
           prodI: kAdMobIosInterstitialUnitProduction);
+
+  /// App Open ad unit — production Android ID đã điền, nhưng app CHƯA hiển
+  /// thị format này (chưa có placement) → test mode trả '' (nothing requests
+  /// it). Khi implement format, thêm Google test ID tương ứng vào nhánh test.
+  static String openApp({bool? android}) =>
+      _pick(android: android, testA: '', testI: '',
+          prodA: kAdMobAndroidOpenAppUnitProduction, prodI: '');
+
+  /// Rewarded ad unit — production Android ID đã điền, format CHƯA hiển thị
+  /// (như openApp: test mode trả '' cho tới khi implement + có test ID).
+  static String rewarded({bool? android}) =>
+      _pick(android: android, testA: '', testI: '',
+          prodA: kAdMobAndroidRewardedUnitProduction, prodI: '');
 
   static String _pick({
     required bool? android,

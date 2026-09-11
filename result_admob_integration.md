@@ -2,6 +2,10 @@
 
 > Date: 2026-09-11 · User request: tích hợp AdMob kiếm tiền trên Play/App Store,
 > flag `test_ads=true` để tránh AdMob giới hạn quảng cáo (LIMIT).
+> **Cập nhật cùng ngày: production Android IDs đã điền** (app + banner +
+> interstitial + open + rewarded do owner cung cấp) — vẫn `test_ads=true`:
+> chạy TEST ads trên unit thật của app; flip `test_ads=false` sau này → ads
+> thật Android dùng ngay IDs đã điền (iOS chưa có IDs → tự tắt khi flip).
 
 ## Kiến trúc
 
@@ -80,12 +84,8 @@ lib/features/ads/ad_banner_widget.dart ← self-hiding banner, pin bottom app sh
 
 ## Còn lại (human, khi muốn kiếm tiền thật)
 
-1. Tạo AdMob account → tạo app Android + iOS → lấy APPLICATION_IDs thật.
-2. Tạo banner (+ interstitial nếu muốn) ad units → điền vào `ads_config.dart`
-   (`kAdMob*Production`) + manifest + Info.plist.
-3. Khai báo Play Data safety (Advertising ID collected/shared) + App Store
-   App Privacy; re-audit privacy.md.
-4. Flip `admob.test_ads: false` (pubspec + mirror trong `ads_config.dart`) →
-   push → CI build → test trên device thật: banner hiện ads thật, không LIMIT.
-5. (Tuỳ chọn) Gắn device test ID từ logcat vào RequestConfiguration để
-   preview ads thật trên máy dev.
+1. ~~Tạo AdMob account → tạo app Android~~ ✅ **Đã tạo (2026-09-11):** App ID `ca-app-pub-6917313063209470~6379119743` + 4 units (banner/interstitial/open/rewarded) đã điền vào `ads_config.dart` + AndroidManifest. App Open + Rewarded đã có ID nhưng **chưa có placement trong UI** (getter sẵn, test mode trả rỗng).
+2. **iOS CHƯA có**: tạo app iOS trên AdMob console → điền `kAdMobIosAppIdProduction` + units + thay GADApplicationIdentifier trong Info.plist (hiện sample).
+3. Khai báo Play Data safety (Advertising ID collected/shared) + App Store App Privacy; re-audit privacy.md.
+4. Flip `admob.test_ads: false` (pubspec + mirror `AppAdsConfig.testAds` trong `ads_config.dart`) → push → CI build → test trên device thật: banner/interstitial thật của app, không LIMIT.
+5. (Tuỳ chọn) Gắn device test ID từ logcat vào RequestConfiguration để preview ads thật trên máy dev.

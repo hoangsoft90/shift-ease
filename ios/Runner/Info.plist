@@ -66,10 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- AdMob (2026-09-11): Google SAMPLE app ID because admob.test_ads=true
-	     (pubspec.yaml) → test units only. BEFORE going live: replace with the
-	     real APPLICATION_ID from the AdMob console and flip test_ads=false
-	     (see lib/config/ads_config.dart + doc/release/privacy.md). -->
+	<!-- AdMob (2026-09-11): app iOS CHƯA tạo trên AdMob console → vẫn dùng
+	     Google SAMPLE app ID (không crash). ĐÃ điền production cho Android
+	     (AndroidManifest). Khi tạo app iOS: thay bằng APPLICATION_ID iOS thật
+	     + điền units trong lib/config/ads_config.dart (hiện rỗng → iOS ads
+	     tự tắt khi test_ads=false). Xem doc/release/privacy.md §ads. -->
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>SKAdNetworkItems</key>

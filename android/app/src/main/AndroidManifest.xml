@@ -41,16 +41,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- AdMob (2026-09-11): APPLICATION_ID is REQUIRED by the Google Mobile
-             Ads SDK — a wrong/missing value crashes the app at startup.
-             Currently the Google SAMPLE app ID because admob.test_ads=true
-             (pubspec.yaml) → test ad units only, no real inventory, no AdMob
-             account LIMIT. BEFORE going live: create the AdMob app, replace
-             this value with the real APPLICATION_ID, and flip test_ads=false
-             (see lib/config/ads_config.dart + doc/release/privacy.md). -->
+        <!-- AdMob (2026-09-11): REAL APPLICATION_ID (Android app đã tạo trên
+             AdMob console). admob.test_ads=true (pubspec.yaml) vẫn bật → SDK
+             chỉ request Google TEST ad units, không inventory thật. Khi chủ
+             app flip test_ads=false → banner/interstitial thật của app. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-6917313063209470~6379119743" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
