@@ -1,7 +1,7 @@
 # Project State — ShiftEase
 
 > Trạng thái project tại thời điểm cập nhật. File chính thức theo dõi phiên: `.project/working.md`.
-> Cập nhật: 2026-09-11 (**CI-APK session** — targetSdk/compileSdk **36** (Play 31/8/2026), cleartext HTTP all domains + INTERNET (Sentry duy nhất), Sentry crash reporting tích hợp (`sentry_flutter ^9.28`, error-only PII off), app icon mới (Android adaptive + iOS), **APK chỉ build trên GH Actions** (local SDK đã gỡ, skill `.agents/skills/shiftease-ci-apk`); trước đó: P9 LAUNCH PREP COMPLETE — ops docs P9.1–P9.9 đủ trong `doc/release/`, `result_p9_launch.md`; KHÔNG claim PRODUCTION LIVE — human/store phải submit + monitor thật; 315/315).
+> Cập nhật: 2026-09-11 (**P0 fix mobile DB path** — `resolveDbPath` (core/db/db_path.dart): mobile = path_provider app-support, KHÔNG BAO GIỜ `HOME ?? '.'`; recovery UI phân loại filesystem/key/cipher; 322/322. Trước đó trong ngày: CI-APK session — targetSdk/compileSdk **36** (Play 31/8/2026), cleartext HTTP + INTERNET (Sentry duy nhất), Sentry (`sentry_flutter ^9.28`, error-only PII off), icon mới (Android adaptive + iOS), **APK chỉ build trên GH Actions** (skill `.agents/skills/shiftease-ci-apk`, repo github.com/hoangsoft90/shift-ease, CI xanh + APK 87MB artifact); trước nữa: P9 LAUNCH PREP COMPLETE, KHÔNG claim PRODUCTION LIVE).
 
 ## 1. Vị trí trên roadmap
 
