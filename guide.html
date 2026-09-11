@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShiftEase — User Guide</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:#1a1a2e; line-height:1.65; max-width:820px; margin:0 auto; padding:32px 20px; }
+  h1 { color:#1E3A5F; } h2 { color:#1E3A5F; margin-top:2em; border-bottom:2px solid #eef2f7; padding-bottom:6px; }
+  h3 { color:#2C5282; margin-top:1.4em; }
+  .card { background:#f6f9fc; border-radius:10px; padding:14px 18px; margin:14px 0; }
+  .tip { background:#eef7ee; border-left:4px solid #3f9d4e; border-radius:6px; padding:10px 16px; margin:12px 0; }
+  .warn { background:#fdf3e7; border-left:4px solid #e8a13c; border-radius:6px; padding:10px 16px; margin:12px 0; }
+  ol ul, ul ul { margin-top:4px; }
+  .muted { color:#5a6a7a; font-size:0.92em; }
+  kbd { background:#eef2f7; border:1px solid #d5dde6; border-radius:4px; padding:1px 6px; font-size:0.9em; }
+  table { border-collapse:collapse; margin:12px 0; } td, th { border:1px solid #d5dde6; padding:6px 12px; }
+  nav a { margin-right:18px; color:#1E5FA8; }
+  footer { margin-top:44px; border-top:1px solid #e3e8ee; padding-top:14px; }
+</style>
+</head>
+<body>
+
+<h1>ShiftEase — User Guide</h1>
+<p class="muted">Offline shift calendar &amp; income estimator · Version 1.0 · <a href="privacy.html">Privacy Policy</a></p>
+
+<nav>
+  <a href="#start">Getting started</a>
+  <a href="#today">Today</a>
+  <a href="#calendar">Calendar</a>
+  <a href="#patterns">Patterns</a>
+  <a href="#pay">Pay &amp; income</a>
+  <a href="#import">Import roster</a>
+  <a href="#export">Export</a>
+  <a href="#data">Backup &amp; data</a>
+  <a href="#faq">FAQ</a>
+</nav>
+
+<h2 id="start">1. Getting started</h2>
+<p>ShiftEase works fully offline. There is no account and nothing to sign up for — install the app and start using it.</p>
+<ol>
+  <li>Open ShiftEase. The first screen is <strong>Jobs</strong>.</li>
+  <li>Tap <strong>New job</strong>, enter a name (for example <em>St. Mary Hospital</em>) and pick the job's <strong>time zone</strong>. Use the Quick pick chips for common zones, or type any IANA name (e.g. <kbd>Asia/Ho_Chi_Minh</kbd>). An invalid zone is rejected before saving.</li>
+  <li>Open the job. Before a pattern can be built you need at least one <strong>shift template</strong> (see below).</li>
+</ol>
+<div class="tip"><strong>Tip:</strong> create one job per employer or site. Each job keeps its own templates, pattern, pay rule and time zone.</div>
+
+<h3>Shift templates</h3>
+<p>A template is a named kind of shift — it is the building block for patterns, quick add and income estimates.</p>
+<ol>
+  <li>In your job screen, under <strong>Shift templates</strong>, tap <strong>Add</strong>.</li>
+  <li>Give it a name (e.g. <em>Day</em>), a short code shown on the calendar (e.g. <kbd>D</kbd>), start and end times, an optional break in minutes, and a color.</li>
+  <li>Overnight shifts are supported: an end time earlier than the start (e.g. 19:00 → 07:00) is treated as next-day.</li>
+</ol>
+
+<h2 id="today">2. Today screen</h2>
+<p>Tap the <strong>Today</strong> icon in the Jobs screen header to open a dashboard across <em>all</em> jobs:</p>
+<ul>
+  <li><strong>Working now</strong> — appears while a shift is in progress.</li>
+  <li><strong>Next shift</strong> — with a live countdown to the start and a rest-gap card (how much time you have before it).</li>
+  <li><strong>Today</strong> — every shift today across jobs; tap one to view or edit it.</li>
+  <li><strong>Hours this week</strong> (Mon–Sun) — computed from actual resolved times, not estimates.</li>
+  <li><strong>Income this week</strong> — one card per job with a pay rule, plus an all-jobs total (see <a href="#pay">Pay &amp; income</a>). Tap a card for the full breakdown.</li>
+</ul>
+<p>A reminder notification is scheduled automatically 60 minutes before your next shift. It reschedules itself whenever your roster changes or when you reopen the app.</p>
+
+<h2 id="calendar">3. Calendar: week and month</h2>
+<h3>Week view</h3>
+<ul>
+  <li>Seven day-columns show every shift as a card with its wall-clock time range and template name/color.</li>
+  <li><strong>Tap a day header</strong> (the date with the + icon) to <strong>Quick add</strong>: one tap on a template adds that shift instantly with the template's default times — perfect for logging a shift on your day off. Choose <em>Custom time…</em> instead to set exact times.</li>
+  <li><strong>Tap a shift card</strong> to open the shift sheet: view details, <strong>edit</strong> start/end times or template, <strong>replace</strong> the template, or <strong>delete</strong> the shift. Every change shows a live income-impact preview before you save.</li>
+</ul>
+<h3>Month view</h3>
+<ul>
+  <li>A fixed 6×7 grid; each day shows the start times of up to two shifts (more shifts show a "+n more" line). Today is highlighted.</li>
+  <li>Tap any day with shifts to jump to that week. Use the arrows to move between months.</li>
+</ul>
+<div class="tip"><strong>Daylight-saving note:</strong> if a shift time falls inside a DST change, ShiftEase refuses to guess. For a spring-forward gap you pick another time; for a fall-back overlap you explicitly choose which of the two clock interpretations applies. Overnight shifts on DST nights are handled correctly.</div>
+
+<h2 id="patterns">4. Shift patterns</h2>
+<p>A pattern repeats your roster automatically so you don't enter shifts one by one.</p>
+<ol>
+  <li>In the job screen tap <strong>New pattern</strong>.</li>
+  <li>Name it (e.g. <em>4-on / 4-off</em>), set the <strong>cycle length</strong> (e.g. 8 days) and fill each slot of the cycle with a template code — or leave a slot empty for a day off.</li>
+  <li>Pick the <strong>effective date</strong> (the day slot 1 happens) and save. A <strong>preview of the first 14 days</strong> is shown before you confirm, so you can check the sequence lines up with reality.</li>
+</ol>
+<h3>Changing a pattern later</h3>
+<p>Open a pattern from the job screen to see its details and upcoming days. Use <strong>Change from date</strong> to create a <em>new version</em> starting that day: the old version closes automatically and the new sequence applies from your chosen date onward. <strong>Your history is never rewritten</strong> — past weeks keep exactly the shifts they had.</p>
+<div class="warn"><strong>Overrides beat the pattern.</strong> Any day you edited individually (edit, delete, replace, imported shifts) keeps its manual value; the pattern fills only the untouched days.</div>
+
+<h2 id="pay">5. Pay rule &amp; income estimates</h2>
+<p>ShiftEase turns your shifts into income <em>estimates</em> using the pay rule you enter.</p>
+<ol>
+  <li>In the job screen, find the <strong>Pay rule</strong> card and tap <strong>Set</strong> (or <em>Edit</em>).</li>
+  <li>Enter the <strong>base hourly rate</strong>, optional <strong>night</strong> and <strong>weekend</strong> percentage bonuses, and one <strong>weekly overtime</strong> rule (hours threshold × multiplier, e.g. &gt;40 h × 1.5). An OT multiplier below 1 is rejected — overtime can never pay less.</li>
+  <li>Choose the <strong>From date</strong>. Saving an <em>edited</em> rule automatically creates a new version from that date; the previous version closes and past weeks keep their old rates. Saving without changes does nothing.</li>
+</ol>
+<h3>Reading the numbers</h3>
+<ul>
+  <li><strong>Today screen</strong> shows a compact income card per job and an all-jobs total; <strong>tap it</strong> for the full <strong>breakdown</strong>: hours worked, regular pay, night/weekend bonuses, overtime, and the estimated total for this week, this month, or a custom date range.</li>
+  <li>Every amount carries the label <em>"Estimate — not an official payroll figure"</em>.</li>
+  <li>If income cannot be computed honestly — no pay rule for a date, or a week spanning two rule versions with weekly overtime — the app shows <strong>"Unable to calculate accurately"</strong> with the specific reason instead of inventing a number.</li>
+</ul>
+<div class="warn">Income figures are estimates from the rules you enter. Always verify critical figures against your employer's payroll.</div>
+
+<h2 id="import">6. Importing a roster</h2>
+<p>Got your schedule on paper, in a message, or in a spreadsheet? Import it.</p>
+<ol>
+  <li>In the job screen tap <strong>Import roster</strong>.</li>
+  <li><strong>Smart paste</strong> — paste lines like <code>Sep 03 Day 07:00-19:00</code>, <code>Sep 04 Night 19:00-07:00 +1</code>, <code>Sep 05 OFF</code>. Or switch to <strong>CSV</strong> and paste rows including a header (<code>date,shift,start,end</code>).</li>
+  <li>ShiftEase parses everything with a confidence level and shows the rows for <strong>review</strong>: approve ✔, reject ✖, or edit each one. Low-confidence rows are flagged so nothing enters your calendar silently.</li>
+  <li>A <strong>diff preview</strong> shows exactly what committing will change versus your current roster (added / removed / changed / unchanged) and how those changes affect your estimated income.</li>
+  <li>Tap <strong>Commit</strong>. If some rows are still pending you'll be asked to keep reviewing or commit only the approved rows. Committing replaces the app's imported rows in the affected date range and is atomic — either everything lands or nothing does.</li>
+</ol>
+<div class="tip">Re-import the same roster after your employer changes it: the diff preview makes the changes obvious before you commit.</div>
+
+<h2 id="export">7. Exporting a week (.ics)</h2>
+<p>In the job screen tap <strong>Export week (.ics)</strong> to write the current week's shifts as a calendar file into the app's folder. Import it into Google Calendar, Apple Calendar or Outlook to see your shifts alongside your events.</p>
+<div class="warn">The .ics file is a convenience share, <strong>not a backup</strong> — it contains no pay rules and can't restore anything. Use Backup for that.</div>
+
+<h2 id="data">8. Backup, restore &amp; data safety</h2>
+<ul>
+  <li><strong>Backup</strong> (Settings → Data) writes a single JSON file of <em>everything</em> — jobs, patterns, shifts, pay rules, imports — into the app's persistent folder. Keep copies of these files somewhere safe (email them to yourself, save to cloud drive).</li>
+  <li><strong>Restore</strong> picks a backup file, shows what it contains, and asks for confirmation. A failure mid-restore rolls back — your current data stays intact.</li>
+  <li><strong>Delete all data</strong> wipes everything and asks twice. There is no undo — make a backup first.</li>
+  <li>Your database is <strong>encrypted on the device</strong> (SQLCipher + hardware-backed key). Schedule data never leaves your phone; the only network traffic is crash reports (Sentry) and ads (AdMob). Details in the <a href="privacy.html">Privacy Policy</a>.</li>
+</ul>
+
+<h2 id="faq">9. FAQ &amp; troubleshooting</h2>
+<table>
+  <tr><th>Problem</th><th>What to do</th></tr>
+  <tr><td>App opens to a "locked" or "storage problem" screen</td><td>Your data is safe — follow the steps on that screen (restart the app/device, check free storage). If it persists, reinstalling creates a fresh database; restore your latest backup afterwards.</td></tr>
+  <tr><td>No reminder appeared</td><td>Check Settings → Notifications → Permission status. If it says <em>Denied</em>, grant notifications in Android settings for ShiftEase. The device must also have a lock screen set for exact scheduling.</td></tr>
+  <tr><td>Income card says "Unable to calculate accurately"</td><td>Open the pay rule and set a rate effective from the missing dates, or pick a week that doesn't span two rule versions. The app refuses to guess on purpose.</td></tr>
+  <tr><td>A pattern day shows the wrong shift</td><td>Edit that specific day — overrides always win over the pattern. If many days are wrong, use Change from date to version the pattern instead.</td></tr>
+  <tr><td>Import says "Unable to schedule some days"</td><td>The orange banner names the exact problem (often a DST-affected time). Edit the affected rows in review before committing.</td></tr>
+  <tr><td>Ads look wrong or too frequent</td><td>Banners sit below the calendar; full-screen ads appear only after a completed roster import and are frequency-capped. Report issues to the support email.</td></tr>
+</table>
+
+<h2>10. Contact &amp; support</h2>
+<p>Questions, bug reports, feedback: <a href="mailto:haibasoftware@gmail.com">haibasoftware@gmail.com</a></p>
+<p class="muted">When reporting a problem, include the app version and what you tapped right before it happened — it makes fixes much faster.</p>
+
+<footer>
+<p class="muted">© 2026 HAIBA Software · <a href="privacy.html">Privacy Policy</a> · ShiftEase is provided "as is"; income figures are estimates, not payroll advice.</p>
+</footer>
+
+</body>
+</html>
