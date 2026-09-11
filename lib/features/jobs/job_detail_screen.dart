@@ -188,8 +188,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   }
 
   /// Gate C B3 — export the CURRENT week (Mon..Sun) of this job to an offline
-  /// .ics file. Every resolved occurrence becomes a UTC VEVENT; nothing is
-  /// sent anywhere (offline-only, D-C7).
+  /// .ics file. Every resolved occurrence becomes a UTC VEVENT; the file is
+  /// written locally only — sharing it (if the user chooses) is outside the
+  /// app (D-C7).
   Future<void> _exportWeek(BuildContext context) async {
     final service = widget.service;
     final now = DateTime.now();

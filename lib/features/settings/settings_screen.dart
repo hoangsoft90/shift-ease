@@ -358,8 +358,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('Data collection'),
             subtitle: const Text(
-                'None. ShiftEase is offline-only: everything stays on this '
-                'device, nothing is sent anywhere.'),
+                'ShiftEase works offline: your schedule data (jobs, shifts, '
+                'pay rules, imports) stays in the local database on this '
+                'device and is never uploaded. Backups are files you create '
+                'and keep yourself. Two services connect to the internet '
+                'from the app: crash reports go to Sentry (error details '
+                'only — no schedule data, no personal identifiers), and '
+                'Google AdMob serves ads, which involves advertising '
+                'identifiers subject to the consent choice shown on first '
+                'use.'),
           ),
 
           const _Header('About'),
@@ -371,11 +378,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Privacy Policy'),
             onTap: () => _showTextDialog(
               'Privacy Policy',
-              'ShiftEase collects no data. The app has no analytics, no '
-              'crash reporting, no advertising identifiers and no network '
-              'permission. All data (jobs, schedules, pay rules, imports) '
-              'lives exclusively in the local database on this device. '
-              'Backups are files you create and keep yourself.',
+              'Your schedule data (jobs, shifts, pay rules, imports) is '
+              'stored only in the encrypted local database on this device '
+              'and is never uploaded. Backups are files you create and keep '
+              'yourself.\n\n'
+              'Crash reports (stack traces and error messages — no schedule '
+              'content, no personal identifiers) are sent to Sentry so '
+              'failures can be fixed. Ads are served by Google AdMob; ad '
+              'personalization depends on the consent choice shown at first '
+              'use, and advertising identifiers are governed by Google\'s '
+              'privacy policy. See the in-app consent form to change your '
+              'choice.',
             ),
           ),
           ListTile(

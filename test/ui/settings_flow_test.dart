@@ -112,20 +112,27 @@ void main() {
     );
     expect(find.text('Delete all data'), findsOneWidget);
 
+    // The Privacy & Security copy is longer now (Sentry + AdMob disclosure)
+    // so the lazy ListView can't show this whole section plus Support at
+    // once — scroll per section and assert within its own viewport window.
     await tester.scrollUntilVisible(
-      find.text('Support'),
+      find.text('PRIVACY & SECURITY'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-
     expect(find.text('PRIVACY & SECURITY'), findsOneWidget);
-    expect(find.text('ABOUT'), findsOneWidget);
 
     // §G honesty: on the plain sqlite3 test build the probe MUST say not
     // encrypted — never a green "Encrypted" claim.
     expect(find.textContaining('NOT encrypted'), findsOneWidget);
     expect(find.byIcon(Icons.lock_open), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('Support'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('ABOUT'), findsOneWidget);
     expect(find.text('Privacy Policy'), findsOneWidget);
     expect(find.text('Terms'), findsOneWidget);
     expect(find.text('Support'), findsOneWidget);
