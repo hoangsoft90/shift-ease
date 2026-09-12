@@ -39,7 +39,9 @@
 #     app signing key is held by Google. If this key is ever lost, Play can
 #     reset the upload key — but the app signing key can never be changed.
 #   • `version` in pubspec.yaml must be bumped before each new upload
-#     (currently 1.0.0+1) — Play rejects a duplicate versionCode.
+#     (currently 1.0.0+2) — Play rejects a duplicate versionCode. This job prints
+#     the resolved versionCode/versionName from the merged manifest, and still
+#     FAILS if the artifact is not signed by the ShiftEase release certificate.
 #   • Build via `flutter build appbundle`, never `./gradlew`: the repo does not
 #     commit the Gradle wrapper (android/.gitignore) — flutter_tools injects the
 #     pinned one from its own cache.
@@ -171,6 +173,27 @@ jobs:
             echo "Ads: enable_ads=$ENABLE_ADS, test_ads=$TEST_ADS"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "OK: AAB signed with the ShiftEase release keystore"
+
+      - name: Report versionCode / versionName (Play rejects duplicate versionCodes)
+        run: |
+          # versionCode/versionName come from pubspec.yaml (never hardcoded in
+          # gradle), so read the merged manifest Gradle fed to the bundle task.
+          MANIFEST=$(find build/app/intermediates -path '*release*' -name AndroidManifest.xml \
+            | xargs -r grep -l 'versionCode' 2>/dev/null | head -1 || true)
+          if [ -z "$MANIFEST" ]; then
+            echo "::warning::merged manifest not found — versionCode unverified in this run"
+            exit 0
+          fi
+          echo "merged manifest: $MANIFEST"
+          VCODE=$(grep -o 'versionCode="[0-9]*"' "$MANIFEST" | head -1 | grep -o '[0-9]*')
+          VNAME=$(grep -o 'versionName="[^"]*"' "$MANIFEST" | head -1 | sed 's/versionName="//; s/"//')
+          echo "versionName=$VNAME versionCode=$VCODE"
+          {
+            echo "### Bundle version"
+            echo ""
+            echo "- versionName: \`$VNAME\`"
+            echo "- versionCode: \`$VCODE\` — must be greater than the last uploaded build"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify R8 kept Room's reflective no-arg constructor
         run: |
