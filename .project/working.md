@@ -1,55 +1,84 @@
 # Working Memory — ShiftEase
 
-> Auto-updated tracking file. Last updated: 2026-09-10
-> Trạng thái project chi tiết: `.project/state.md`. Phiên này: **đóng gói plan8 RC batch (A–J) — verify + đồng bộ docs + handoff**.
+> Auto-updated tracking file. Last updated: **2026-09-12**
+> Trạng thái project chi tiết: `.project/state.md`. Session entry: `.project/openspec_entry.md`.
+> Phiên này: **release packaging (4 workflow GH Actions) + fix 2 crash P0 chỉ hiện ở release, verify trên máy thật.**
 
-## Session State (2026-09-10)
+## Session State (2026-09-12)
 
 ### Bối cảnh
 
-RC batch A–J đã thực thi xong trong phiên trước (2026-09-08, xem `result16_rc.txt`), nhưng `.project/*` + `next.md` còn stale (ghi "249/249, C UI dở, D–J chưa làm"). Phiên này **verify lại bằng chứng rồi mới sync docs**.
+User báo "release APK cài được vào phone, nhưng mở lên bị crash" → dùng **adb với máy thật**
+(Pixel 3a / Android 12 / arm64-v8a) để debug thay vì đoán từ code. Truy ra **2 bug độc lập**,
+cả hai đều **invisible ở debug build**:
 
-### Verification (bằng chứng chạy 2026-09-10, sau khi `ls` xác nhận mọi file RC trên đĩa)
+1. `MobileAdsInitProvider: IllegalStateException: * Invalid application ID. *` — do `-PenableAds=false`
+   ghi `APPLICATION_ID=""` (fix `8755ec1`).
+2. `Failed to create an instance of androidx.work.impl.WorkDatabase` — R8 xoá constructor rỗng mà
+   Room gọi bằng reflection (fix `a1d9b0c`).
 
-- `flutter analyze --no-pub` → **No issues found!** (19.3s)
-- `flutter test test/` → **288/288 All tests passed! (exit=0)** — khớp `result16_rc.txt`
-- Files RC xác nhận trên đĩa (`ls -la`, mtime 2026-09-08): `lib/core/db/backup_restore.dart` · `lib/core/db/security_gate.dart` · `lib/features/settings/settings_screen.dart` · `doc/mobile_readiness.md` · `test/core/adversarial/rc_adversarial_test.dart` · `test/ui/rc_csv_diff_flow_test.dart` · `test/ui/dst_resolution_flow_test.dart` · `test/features/shift_reminder_rc_test.dart` · `test/core/db/backup_restore_test.dart` · `test/core/db/security_gate_test.dart` · `test/ui/settings_flow_test.dart`
+Cuối phiên user xác nhận **"đã hết lỗi"** và yêu cầu rút bài học thành skill.
 
-### Đã làm trong phiên này (đóng gói, không code mới)
+### Verification (bằng chứng chạy lại trên đĩa 2026-09-12 — không tin số cũ)
 
-- [x] Verify 288/288 + analyze clean (không tin lời — chạy lại)
-- [x] Sync `.project/state.md` → RC hoàn tất A–J
-- [x] Sync `.project/working.md` (file này)
-- [x] Sync `next.md` (mục RC → hoàn tất; việc trước mắt = human review + device/CI)
-- [x] Sync `.project/openspec_entry.md` + `.project/ai-rules.md`
-- [x] Handoff mới: `handoff_20260910_rc_complete.md`
+- `flutter analyze --no-pub --fatal-infos` → **No issues found!** (15.4s)
+- `flutter test test/` → **343/343 All tests passed!** (exit=0, 2m03s)
+  - `test/config` 12 · `test/core` 247 · `test/domain` 28 · `test/features` 16 · `test/ui` 40
+- **CI @ `a1d9b0c` — 5/5 run xanh**: ShiftEase CI · Build Debug APK · Build release APK (push `34672504259` + dispatch split `34672509479`) · Build release AAB (`34672504297`)
+- Guard CI **thật** (không pass rỗng): `R8 removed-code report: build/app/outputs/mapping/release/usage.txt` → `OK: androidx.work.impl.WorkDatabase_Impl kept its no-arg constructor (3 other member(s) removed)`
+- **Máy thật sau khi cài APK release từ CI**: `pidof`=665 · `ResumedActivity` = `.MainActivity` · `mHasSurface=true isReadyForDisplay()=true` · crash buffer **rỗng** · `grep -c "E/flutter\|FATAL"` = **0** · ads SDK init (`Ads: ... setTestDeviceIds("CE6FF61F67B050F7AA6FC92007DB4284")`)
+- Git: `main` @ `a1d9b0c` (log phiên: `9a98489`→`da0afaf`→`e48da3e`→`cb96d85`→`1f6e2f6`→`8755ec1`→`2dc2cdd`→`a1d9b0c`), working tree sạch (chỉ `store_assets/guide.html` untracked)
 
-### Trạng thái RC plan8 (đã khóa — chi tiết trong result16_rc.txt)
+### Đã làm trong phiên này
 
-- Phần A Integrity A1–A8 ✅ · Phần B Income B1–B7 ✅ (phiên 2026-09-07)
-- C1/C2 UI (parseCsv + CSV mode + diff card) ✅ · D DST real resolution ✅ · E1/E2 notification ✅ · E3 structure (**device BLOCKED**) ✅ · F backup/restore ✅ · G security gate structure (**device BLOCKED**) ✅ · H settings ✅ · I mobile readiness doc (**verify BLOCKED toàn bộ**) ✅ · J adversarial 13 test ✅
-- Evidence: `result16_rc.txt` · checklist.md/features.md/next.md đã đồng bộ · `doc/mobile_readiness.md`
+- [x] Debug bằng adb trên máy thật thay vì suy luận: `logcat -b crash` → stack thật
+- [x] Fix crash #1: `adsAppId` thành hằng số luôn hợp lệ; tắt ads chỉ còn ở Dart (`ENABLE_ADS`)
+- [x] Fix crash #2: `android/app/proguard-rules.pro` + `proguardFiles(...)`; **không** tắt minify
+- [x] Guard CI: `tool/check_manifest_ads.py` (parse giá trị attribute) + `tool/check_r8_keep.py` (usage.txt)
+- [x] Workflow: release APK (có `split_per_abi`), release AAB ký keystore cố định từ GitHub secrets
+- [x] Sửa guidance **sai** trong `doc/release/build_notes.md` §1.5 (đang mô tả cách blank app id)
+- [x] Gh-pages chỉ còn 3 file public (index/guide/privacy) — trước đó mirror source
+- [x] `chplay.md` + `store_assets/` (icon 512, feature graphic 1024×500, privacy, user guide)
+- [x] Skill: generic `android-release-only-crash` (global, validator PASS) + cập nhật `shiftease-ci-apk`
+- [x] Verify lại toàn bộ trên máy thật + CI trước khi ghi docs (analyze 343/343)
+
+### Trạng thái release (đã khoá bằng bằng chứng)
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Release APK | ✅ build + ký + cài + cold-start OK trên máy thật |
+| Release AAB | ✅ build + verify `CN=ShiftEase` (Play sẽ không từ chối "debug-signed") |
+| Debug APK | ✅ build + assert manifest **có** app id production |
+| CI test | ✅ 343/343 |
+| Play submission | ⏸ chưa — human điền form theo `chplay.md` rồi upload AAB |
+| iOS | ⏸ chưa — cần macOS + certs |
 
 ## Pending Decisions / Cần hỏi user
 
-1. **Human review RC** toàn bộ batch A–J (độc lập, như review plan10 trước đó)?
-2. Sau review: **deferred §14** (OCR/M4.5 spike — cần 20–30 roster thật · Cloud · Sharing) hay **closed testing** trước?
-3. **Device/CI verification** (E3/G/I — blocked ngoài sandbox): chạy trên máy user/CI khi nào; có cần setup CI build (GitHub Actions) không?
+1. **Upload Play Console** bây giờ (bump `versionCode` → AAB) hay chạy **device matrix 15 dòng** trước?
+2. **AdMob**: thêm máy thật vào test device rồi test ads thật, hay giữ `test_ads=true` đến khi submit?
+3. Đưa skill global `android-release-only-crash` vào `.agents/skills/` của repo (đi kèm code) hay giữ global?
 
 ## Pending Work
 
-**Immediate (chờ quyết định user):**
-- [ ] Human review release-candidate → xử lý findings (nếu có)
-- [ ] Device/CI verification theo `doc/mobile_readiness.md` (15-row matrix)
+**Immediate:**
+- [ ] Play Console: Data Safety + content rating → bump versionCode → upload AAB ký release
+- [ ] Chạy hết 15-row device matrix trong `doc/mobile_readiness.md` (giờ đã có release APK + adb → blocker giảm mạnh)
+- [ ] Sync `next.md` / `next1.md` theo phiên này
 
-**Later (deferred plan8 §14 — sau review RC):**
-- [ ] OCR/M4.5 spike (cần 20–30 roster thật) → M5 nếu đạt ngưỡng
-- [ ] Cloud sync · Dynamic Webcal · Sharing · CalendarEvent model · Health AI · B2B · Tax/net-pay
-- [ ] M3 backlog: work-week boundary/state OT rule mở rộng
+**Later:**
+- [ ] iOS build/archive (P8.4) — cần macOS + certs
+- [ ] AdMob test device + theo dõi doanh thu ads sau khi publish
+- [ ] Deferred §14: OCR/M4.5 spike (cần 20–30 roster thật) · Cloud · Sharing
 
 ## Known Issues / Notes
 
-- E3/G/I chỉ là structure + honest status — KHÔNG được claim PASS trong docs hay store submission cho đến khi device/CI verify xong.
-- Không build apk local (sandbox không toolchain) — build chỉ ở CI/máy user.
-- Kỷ luật giữ nguyên: mỗi claim = bằng chứng đĩa (`ls`, output test); viết result* TRƯỚC khi sửa docs; không BEGIN lồng nhau trong SQLite.
-- Lịch sử test số: 207 (Gate C) → 249 (A+B+C pure, 2026-09-07) → **288 (RC hoàn tất, 2026-09-08, verify lại 2026-09-10)**.
+- **Kỷ luật quan trọng nhất phiên này: build xanh KHÔNG phải đã verify.** Cả 2 crash đều đi qua
+  build + test + CI xanh nhiều lần; chỉ lộ khi cài artifact release lên máy thật.
+- **Không bao giờ** blank `APPLICATION_ID` để "tắt ads", và **không bao giờ** `isMinifyEnabled=false`
+  để "cho build qua" — hai bẫy đã gây đúng 2 crash P0.
+- Verify artifact bằng **parse giá trị thật**, không `strings | grep` (APK manifest là string pool UTF-16).
+- Không build APK local (không có toolchain) — build ở CI; nhưng **`adb` có sẵn và là công cụ verify**.
+- Test device AdMob của Pixel 3a: `CE6FF61F67B050F7AA6FC92007DB4284` — thêm vào AdMob trước khi test ads thật.
+- `.agents/` nằm trong `.gitignore` → token/skill local **không** bị đẩy lên remote (đã verify `git ls-files .agents` rỗng).
+- Lịch sử test số: 207 (Gate C) → 249 → 288 (RC, 2026-09-08) → 315 (P7.2) → **343 (2026-09-12, verify lại)**.

@@ -9,7 +9,7 @@
 |---|---|
 | App name | **ShiftEase** (thống nhất Android label + iOS display name 2026-09-11) |
 | Package / bundle | `com.shiftease.shiftease` |
-| Version | 1.0.0+1 |
+| Version | 1.0.0+2 |
 | Category (đề xuất) | Productivity / Work (danh mục store sẽ chốt khi submit) |
 | Content rating | Không violence/sex/gambling; user-generated content chỉ trên device — điền form khai báo store, không dùng UGC social features |
 

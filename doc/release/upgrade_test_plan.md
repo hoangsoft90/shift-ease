@@ -7,8 +7,8 @@
 
 | Item | Giá trị |
 |---|---|
-| Version cũ | previous RC (1.0.0+1 baseline RC, schema v3) |
-| Version mới | release candidate 1.0.0+1 (schema v3) |
+| Version cũ | previous RC (1.0.0+1, schema v3) |
+| Version mới | release candidate 1.0.0+2 (schema v3) |
 | Device | NOT RUN (human) |
 | Ngày | NOT RUN |
 

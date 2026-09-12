@@ -1,7 +1,7 @@
 # Release Freeze — ShiftEase Release Candidate
 
 > P8.1 (`plan_p8.md` §P8.1 / `phases/P8_release_preparation.md` §1).
-> Áp dụng từ 2026-09-11 cho release candidate **1.0.0+1** (start date = ngày áp dụng; ghi đè ngày bắt đầu 2026-09-12 sai trước đó).
+> Áp dụng từ 2026-09-11 cho release candidate **1.0.0+1**, bump **1.0.0+2** ngày 2026-09-12 trước khi build AAB cho Play (chưa bản nào được publish nên freeze không bị phá; code không đổi, chỉ versionCode) (start date = ngày áp dụng; ghi đè ngày bắt đầu 2026-09-12 sai trước đó).
 
 ## 1. Bị đóng băng (frozen) — không thay đổi trong RC
 

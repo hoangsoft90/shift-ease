@@ -87,7 +87,7 @@ flutter build apk --release --dart-define=ENABLE_ADS=false
 flutter build apk --release --dart-define=TEST_ADS=false
 ```
 
-- Version tự lấy từ `pubspec.yaml` (`1.0.0+1` → versionName 1.0.0, versionCode 1) — không hard-code khác trong gradle.
+- Version tự lấy từ `pubspec.yaml` (`1.0.0+2` → versionName 1.0.0, versionCode 2) — không hard-code khác trong gradle. Workflow AAB in ra versionCode/versionName **thật** từ merged manifest (`Report versionCode / versionName`) để tránh upload trùng versionCode (Play từ chối).
 - Build type `release` phải không có debug flag (đã audit: `lib/` không có kDebugMode/mock/endpoint).
 - Manifest **luôn** mang `APPLICATION_ID` hợp lệ — `adsAppId` là hằng số trong
   `build.gradle.kts`, không còn nhánh `enableAds`. Cờ `enable_ads` chỉ còn ở Dart

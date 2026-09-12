@@ -15,7 +15,7 @@
 | 3 trục differentiation | (1) Nhập liệu nhanh, (2) Correctness Contract (tính đúng), (3) UX đơn giản |
 | Monetization | **AdMob banner + interstitial + app open** đã tích hợp (`test_ads=true` — chỉ Google test ads, chưa live) + kế hoạch Free/Pro Lifetime $39.99 (chưa implement) |
 | Platform | Android (targetSdk 36, minSdk 24) + iOS; offline-first, local-only |
-| Trạng thái build | RC 1.0.0+1 · CI 2 workflows (ShiftEase CI 8 jobs + Build Debug APK) · github.com/hoangsoft90/shift-ease |
+| Trạng thái build | RC **1.0.0+2** · CI 4 workflows (ShiftEase CI · Debug APK · Release APK · Release AAB ký keystore release) · github.com/hoangsoft90/shift-ease |
 
 ### Correctness Contract (áp dụng mọi module)
 
@@ -204,4 +204,4 @@
 - `flutter test test/` → **328/328 pass**
 - `dart run tool/cipher_proof.dart` → **SQLCipher 4.18.0 community**
 - CI: ShiftEase CI (8 jobs) + Build Debug APK — đã green-run trên github.com/hoangsoft90/shift-ease
-- App label `ShiftEase` (Android + iOS), version `1.0.0+1`, ids `com.shiftease.shiftease`
+- App label `ShiftEase` (Android + iOS), version `1.0.0+2`, ids `com.shiftease.shiftease`

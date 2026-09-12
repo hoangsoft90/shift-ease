@@ -13,7 +13,7 @@
 | P7.3/P7.4 SecretStore | ✅ CODE READY · ⛔ device | production impl + 6 error-path tests; key persistence qua kill/reboot = BLOCKED → **WAIVED by user** |
 | P7.5–P7.7 (notification device matrix, lifecycle walk) | ⛔ NOT RUN → **WAIVED by user** | logic + unit tests (E1/E2) PASS trong sandbox |
 | P8.0 CI | ✅ on disk + PASS-local (4/4 lệnh) · ⏳ GitHub green run pending | `result_p8_release_candidate.md` §3; **run xanh trên GitHub là điều kiện bắt buộc TRƯỚC submission thật** |
-| P8.1 freeze + P8.2 version/config | ✅ PASS | `doc/release_freeze.md`; 1.0.0+1; ShiftEase label thống nhất |
+| P8.1 freeze + P8.2 version/config | ✅ PASS | `doc/release_freeze.md`; **1.0.0+2** (bump versionCode 2026-09-12 trước build AAB cho Play); ShiftEase label thống nhất |
 | P8.3/P8.4 signed builds | ⛔ BLOCKED (needs keys) → **WAIVED for prep; bắt buộc trước submit thật** | `doc/release/build_notes.md` |
 | P8.5/P8.6 smoke/upgrade | ✅ docs · ⛔ device run → **WAIVED by user** | `doc/release/smoke_checklist.md`, `doc/release/upgrade_test_plan.md` |
 | P8.7/P8.8 store/privacy | ✅ DRAFT (đúng behavior; thiếu support email + policy URL host) | `doc/release/store_assets.md`, `doc/release/privacy.md` |
@@ -33,7 +33,7 @@
 ## 3. Freeze + version
 
 - Freeze còn hiệu lực: `doc/release_freeze.md` (áp dụng từ 2026-09-11) — chỉ nhận P0/P1/crash/integrity/security/compliance
-- Version/build từ `pubspec.yaml` (nguồn duy nhất): **1.0.0+1**
+- Version/build từ `pubspec.yaml` (nguồn duy nhất): **1.0.0+2**
 
 ## 4. Kết luận gate
 
