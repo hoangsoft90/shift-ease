@@ -67,16 +67,15 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
-      - name: Verify the packed manifest carries the AdMob APPLICATION_ID
+      - name: Verify the packed manifest declares a valid AdMob app ID
         run: |
-          set -e
-          # No ads flags are passed here, so the Gradle property falls back to
-          # true: this APK must ship the production APPLICATION_ID. When the
-          # property was inverted this build silently carried an EMPTY app id,
-          # which does not crash — it just makes every ad fail to load, so the
-          # assertion is worth its few seconds.
-          python3 tool/check_manifest_ads.py \
-            build/app/outputs/flutter-apk/app-debug.apk --expect=present
+          # This APK once shipped an EMPTY APPLICATION_ID (from an inverted
+          # Gradle property). An empty value is not a silent no-ads build — the
+          # Google Mobile Ads SDK kills the process in its own ContentProvider:
+          # "Unable to get provider ... MobileAdsInitProvider: Invalid
+          # application ID" (captured on a real device 2026-09-12). The checker
+          # parses the actual android:value, which a string search cannot do.
+          python3 tool/check_manifest_ads.py build/app/outputs/flutter-apk/app-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

@@ -25,12 +25,14 @@
 # Play only tells you about it at upload time.
 #
 # Ads switches (same pair as build-release-apk.yml — no code edits needed):
-#   • enable_ads (default TRUE) → ads ON, the production AdMob APPLICATION_ID
-#     stays in the packed manifest and Dart initializes the SDK.
+#   • enable_ads (default TRUE) → ads ON: Dart initializes the SDK.
+#     `false` is a DART-SIDE switch only. The manifest ALWAYS carries a valid
+#     AdMob APPLICATION_ID — blanking it crashes the app on every launch inside
+#     MobileAdsInitProvider ("Invalid application ID", verified on a real
+#     device 2026-09-12), so this job asserts the id is present AND well-formed
+#     rather than ever building one without it.
 #   • test_ads (default FALSE) → serve the REAL AdMob unit IDs. Set it back to
 #     true to build with Google TEST units instead.
-# The packed manifest is verified against whichever way these are set, so a
-# misread Gradle property fails the run rather than reaching Play.
 #
 # Play Console notes:
 #   • Keep Play App Signing ENABLED. This keystore is then the UPLOAD key; the
@@ -130,13 +132,10 @@ jobs:
       - name: Build release AAB
         run: |
           set -e
-          ARGS=(--release)
-          if [ "$ENABLE_ADS" = "false" ]; then
-            ARGS+=(--android-project-arg=enableAds=false)
-          fi
-          ARGS+=(--dart-define=ENABLE_ADS="$ENABLE_ADS" --dart-define=TEST_ADS="$TEST_ADS")
-          echo "flutter build appbundle ${ARGS[*]}"
-          flutter build appbundle "${ARGS[@]}"
+          echo "flutter build appbundle --release --dart-define=ENABLE_ADS=$ENABLE_ADS --dart-define=TEST_ADS=$TEST_ADS"
+          flutter build appbundle --release \
+            --dart-define=ENABLE_ADS="$ENABLE_ADS" \
+            --dart-define=TEST_ADS="$TEST_ADS"
           ls -lh build/app/outputs/bundle/release/
 
       - name: Verify AAB is RELEASE-signed (never debug-signed)
@@ -173,14 +172,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "OK: AAB signed with the ShiftEase release keystore"
 
-      - name: Verify the packed manifest matches the ads switch
+      - name: Verify the bundle declares a valid AdMob app ID
         run: |
-          set -e
-          AAB=build/app/outputs/bundle/release/app-release.aab
-          if [ "$ENABLE_ADS" = "false" ]; then EXPECT=absent; else EXPECT=present; fi
-          # The bundle stores a protobuf manifest; the checker reads that entry
-          # (not the root AndroidManifest.xml) in both string-pool encodings.
-          python3 tool/check_manifest_ads.py "$AAB" --expect="$EXPECT"
+          # Reads the merged release manifest Gradle fed to the bundle task (the
+          # bundle itself stores a protobuf manifest) and asserts the
+          # APPLICATION_ID meta-data exists with a well-formed value — the exact
+          # check that would have caught the blank-placeholder launch crash.
+          python3 tool/check_manifest_ads.py build/app/outputs/bundle/release/app-release.aab
 
       # if: always() — keep the bundle available even when a verification step
       # fails, so the failing run is diagnosable from the artifact itself.

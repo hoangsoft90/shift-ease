@@ -3,11 +3,13 @@
 # Produces a RELEASE-mode APK for device QA. Two independent switches, both
 # passed by this workflow (no Dart/Gradle edits needed):
 #
-#   • enable_ads (default TRUE) → ads ON. The AdMob APPLICATION_ID stays in the
-#     packed manifest and Dart initializes the SDK. Setting it to false strips
-#     both halves:
-#       --android-project-arg=enableAds=false  blanks the AdMob APPLICATION_ID
-#       --dart-define=ENABLE_ADS=false         Dart never initializes the SDK
+#   • enable_ads (default TRUE) → ads ON: Dart initializes the SDK and the real
+#     (or test) units serve. `false` = no ad is ever requested.
+#     IMPORTANT: this is a DART-SIDE switch only (`--dart-define=ENABLE_ADS`).
+#     The manifest ALWAYS carries a valid AdMob APPLICATION_ID — blanking it is
+#     NOT a way to disable ads, it crashes the app on every launch inside
+#     MobileAdsInitProvider ("Invalid application ID", verified on a real
+#     device 2026-09-12).
 #
 #   • test_ads (default FALSE) → serve the REAL AdMob unit IDs from
 #     lib/config/ads_config.dart. Set true for Google TEST units (no real ad
@@ -120,23 +122,18 @@ jobs:
       - name: Build release APK
         run: |
           set -e
-          ARGS=(--release)
-          if [ "$ENABLE_ADS" = "false" ]; then
-            ARGS+=(--android-project-arg=enableAds=false)
-          fi
-          ARGS+=(--dart-define=ENABLE_ADS="$ENABLE_ADS" --dart-define=TEST_ADS="$TEST_ADS")
-          echo "flutter build apk ${ARGS[*]}"
-          flutter build apk "${ARGS[@]}"
+          echo "flutter build apk --release --dart-define=ENABLE_ADS=$ENABLE_ADS --dart-define=TEST_ADS=$TEST_ADS"
+          flutter build apk --release \
+            --dart-define=ENABLE_ADS="$ENABLE_ADS" \
+            --dart-define=TEST_ADS="$TEST_ADS"
           ls -lh build/app/outputs/flutter-apk/
 
-      - name: Verify the packed manifest matches the ads switch
+      - name: Verify the packed manifest declares a valid AdMob app ID
         run: |
-          set -e
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          if [ "$ENABLE_ADS" = "false" ]; then EXPECT=absent; else EXPECT=present; fi
-          # Ground truth, in both UTF-8 and UTF-16 string-pool encodings: an
-          # inverted Gradle property fails whichever way this is run.
-          python3 tool/check_manifest_ads.py "$APK" --expect="$EXPECT"
+          # Parses the real AXML attribute VALUE (a string-pool search could not
+          # tell an empty android:value="" from one that appears elsewhere —
+          # and an empty value is a guaranteed launch crash).
+          python3 tool/check_manifest_ads.py build/app/outputs/flutter-apk/app-release.apk
 
       - name: Verify APK signature
         run: |

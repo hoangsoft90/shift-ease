@@ -8,29 +8,26 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
-// Ads master switch (2026-09-11)
+// AdMob APPLICATION_ID — ALWAYS a valid ID, never blank (2026-09-12)
 // ---------------------------------------------------------------------------
-// Read from a Gradle project property so CI can strip ads WITHOUT touching Dart:
-//   flutter build apk --release --android-project-arg=enableAds=false
-// (that flag is translated by flutter_tools into `-PenableAds=false`).
-// When false the AdMob APPLICATION_ID meta-data is blanked in the merged
-// manifest — the SDK has no app ID to initialize with and never requests an ad.
-// The Dart side is gated independently (AppAdsConfig.enableAds, fed by
-// `--dart-define=ENABLE_ADS=...`), so both halves must be flipped together;
-// the release workflow passes both flags.
-// Ads are ON unless the property is explicitly the string "false" (unset or
-// unrecognised values keep ads on — the safe default for a monetised app).
-// NOTE: this once read `...equals("false")`, which assigned `true` exactly when
-// ads were being disabled, so `-PenableAds=false` shipped the production app id
-// and builds without the flag shipped none. Keep the polarity explicit.
-val enableAds: Boolean =
-    (((findProperty("enableAds") as? String) ?: "true").trim().lowercase() != "false")
-
-// Real AdMob Android application ID (AdMob console, 2026-09-11). Only a
-// manifest placeholder — WHICH ad unit serves is decided at runtime by
-// AppAdsConfig (testAds → Google's official test units).
-val adsAppId: String =
-    if (enableAds) "ca-app-pub-6917313063209470~6379119743" else ""
+// Do NOT make this conditional. An empty/missing value is not "ads off" — the
+// Google Mobile Ads SDK validates it in its own ContentProvider BEFORE Dart
+// ever runs and kills the process:
+//
+//   java.lang.RuntimeException: Unable to get provider
+//     com.google.android.gms.ads.MobileAdsInitProvider:
+//   java.lang.IllegalStateException: * Invalid application ID. *
+//
+// Captured from a real device (Pixel 3a, Android 12) on a build that blanked
+// the id, so `-PenableAds=false` used to produce an app that crashed on every
+// launch. Turning ads OFF is a DART-side decision only
+// (`--dart-define=ENABLE_ADS=false` → AppAdsConfig.enableAds = false → the SDK
+// is never initialized and no ad unit is ever requested). Shipping a valid,
+// unused APPLICATION_ID is exactly what Google's setup requires.
+//
+// WHICH ad unit serves is likewise a runtime decision (AppAdsConfig.testAds →
+// Google's official test units vs the production units in ads_config.dart).
+val adsAppId: String = "ca-app-pub-6917313063209470~6379119743"
 
 // ---------------------------------------------------------------------------
 // Release signing — keystore never lives in the repo
