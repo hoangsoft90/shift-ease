@@ -104,6 +104,17 @@ android {
                 if (hasReleaseKeystore) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")
             manifestPlaceholders["adsAppId"] = adsAppId
+            // R8 minification is ON for release (the Flutter Gradle plugin sets
+            // minifyEnabled = true) while debug builds are unminified. These
+            // rules keep the no-arg constructor of Room's reflectively created
+            // database implementations — without them the process dies in
+            // androidx.startup BEFORE Application.onCreate() on every cold start
+            // ("Failed to create an instance of androidx.work.impl.WorkDatabase",
+            // reproduced on a real device 2026-09-12). See proguard-rules.pro.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
         debug {
             manifestPlaceholders["adsAppId"] = adsAppId

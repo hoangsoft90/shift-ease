@@ -78,11 +78,10 @@
 # AAB — artifact nộp Play (cần android/key.properties + keystore thật)
 flutter build appbundle --release
 
-# Release APK cho QA, ads TẮT hoàn toàn (không có APPLICATION_ID trong manifest
-# + Dart không init SDK → không request nào; không crash)
-flutter build apk --release \
-  --android-project-arg=enableAds=false \
-  --dart-define=ENABLE_ADS=false
+# Release APK cho QA, ads TẮT (chỉ Dart). Manifest VẪN giữ APPLICATION_ID hợp lệ.
+# KHÔNG bao giờ blank app ID: đó không phải "tắt ads" mà là crash mọi lần mở app
+# (MobileAdsInitProvider: "Invalid application ID", verify trên pixel thật 2026-09-12).
+flutter build apk --release --dart-define=ENABLE_ADS=false
 
 # Release APK có ads thật (chỉ khi unit ID production đã điền trong ads_config.dart)
 flutter build apk --release --dart-define=TEST_ADS=false
@@ -90,7 +89,12 @@ flutter build apk --release --dart-define=TEST_ADS=false
 
 - Version tự lấy từ `pubspec.yaml` (`1.0.0+1` → versionName 1.0.0, versionCode 1) — không hard-code khác trong gradle.
 - Build type `release` phải không có debug flag (đã audit: `lib/` không có kDebugMode/mock/endpoint).
-- Gradle đọc `findProperty("enableAds")` (không lỗi khi không truyền → default `true`).
+- Manifest **luôn** mang `APPLICATION_ID` hợp lệ — `adsAppId` là hằng số trong
+  `build.gradle.kts`, không còn nhánh `enableAds`. Cờ `enable_ads` chỉ còn ở Dart
+  (`--dart-define=ENABLE_ADS`).
+- R8 **bật** cho release (Flutter plugin set `minifyEnabled = true`; debug không
+  minify). Keep rule release nằm ở `android/app/proguard-rules.pro` và được CI
+  assert bằng `tool/check_r8_keep.py` — xem §1.6.
 - **Build bằng `flutter build apk`, KHÔNG chạy `./gradlew` trực tiếp**: repo không
   commit Gradle wrapper (`android/.gitignore`) — flutter_tools inject wrapper đã pin
   (Gradle 9.3.1) từ cache của nó.
@@ -108,7 +112,8 @@ flutter build apk --release --dart-define=TEST_ADS=false
 | 7 | Backup/restore round-trip | NOT RUN |
 | 8 | No debug UI / no debug logging (build release) | NOT RUN |
 | 9 | Signature verify: `apksigner verify --print-certs` (hoặc Play Console chấp nhận — không bị từ chối "debug-signed") | NOT RUN |
-| 10 | Ads disabled supply-chain verify (bila build dengan -PenableAds=false): APK `AndroidManifest.xml` hardcoded cos tidak ada `<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" ...` dengan nilai bukan kosong; APK boleh diinstall tanpa ads tanpa crash | NOT RUN |
+| 10 | Cold start bản release (R8 minify ON): install → mở app → không crash trong `androidx.startup`; `tool/check_r8_keep.py` PASS (§1.6) | NOT RUN |
+| 11 | Ads disabled (`ENABLE_ADS=false`): không request ad nào, app vẫn mở được, manifest vẫn có APPLICATION_ID hợp lệ | NOT RUN |
 
 ### 1.4 Status
 
@@ -152,33 +157,63 @@ flutter build ipa --release
 - NEVER PASS "signed release" chỉ vì debug build chạy được
 - NEVER đổi signing config để "cho qua" — sai signing là lỗi phải sửa đúng cách
 
-## 1.5 Ads-disable supply-chain (enable_ads=false)
+## 1.5 Ads-off build (`enable_ads=false`) — Dart-side switch ONLY
 
-> Không phải UI option; biasa dipakai untuk release APK sementara tanpa iklan
-> (misalnya prototype/konsultasi internal) tanpa rubah kode Dart.
->
-> Rantai kerja:
-> 1. `pubspec.yaml` `admob.enable_ads: false`
->    Atau lewat CLI: `flutter build apk --release -PenableAds=false`.
-> 2. `android/app/build.gradle.kts` — `enableAds` membaca properti Gradle
->    (default `true` kalau tidak ada) lalu `adsAppId` jadi `""` bila
->    `enableAds == "false"`.
-> 3. `android/app/src/main/AndroidManifest.xml` — `<meta-data ... APPLICATION_ID ...>`
->    diisi oleh `manifestPlaceholders["adsAppId"]` → bila `adsAppId` kosong,
->    manifest mengandung `android:value=""`.
-> 4. `google_mobile_ads` SDK di device menerima app ID kosong → SDK self-disable
->    (tidak request, tidak crash, tidak block startup).
-> 5. Dart `AppAdsConfig.enableAds` masih `true` secara default (pubspec
->    `admob.enable_ads: true`); bila owner ingin kedua layer konsisten untuk
->    build tanpa iklan jangka panjang, set juga di pubspec — tapi workflow CI
->    cukup set `-PenableAds=false` saja.
->
-> Catatan: `test_ads` (pubspec `admob.test_ads`) TIDAK berhubungan dengan
-> enable_ads. `enable_ads=false` = hanya matikan SDK secara keseluruhan.
-> `test_ads=false` = pakai production unit IDs (ads nyata bila unit disi).
+> Không phải UI option. Dùng cho bản release tạm không quảng cáo (QA/reviewer)
+> mà không sửa code Dart.
 
-```bash
-# Verify lokal (QK, bukan verifikasi tanda tangan):
-# Pastikan APK hasil build -PenableAds=false tidak mengandung app ID.
-# (Sesuai prinsip: bila enableAds=false, meta-data APPLICATION_ID berisi "".)
+Chuỗi hoạt động:
+1. Workflow truyền `--dart-define=ENABLE_ADS=false` (hoặc dispatch input
+   `enable_ads=false`).
+2. `lib/config/ads_config.dart` → `AppAdsConfig.enableAds=false` → `main.dart`
+   **không** gọi `initializeAds()` → không request ad nào.
+3. Manifest **vẫn** chứa `com.google.android.gms.ads.APPLICATION_ID` hợp lệ
+   (`adsAppId` là hằng số trong `android/app/build.gradle.kts`).
+
+**CẤM blank app ID.** Bản trước đây set `adsAppId=""` khi tắt ads với giả định
+"SDK tự tắt" — SAI. SDK validate app ID trong ContentProvider của chính nó,
+**trước** Dart, và giết process:
+
 ```
+java.lang.RuntimeException: Unable to get provider
+  com.google.android.gms.ads.MobileAdsInitProvider:
+java.lang.IllegalStateException: * Invalid application ID. *
+```
+
+(verify trên Pixel 3a / Android 12 thật, 2026-09-12). CI chặn hẳn loại này bằng
+`tool/check_manifest_ads.py` — script parse **giá trị attribute thật** của AXML
+(`strings | grep` không thấy chuỗi UTF-16 và không phân biệt được `value=""`).
+
+Lưu ý: `test_ads` độc lập với `enable_ads`. `enable_ads=false` = không init SDK.
+`test_ads=false` = dùng production unit IDs (ads thật nếu unit đã điền).
+
+## 1.6 R8 / ProGuard (lớp crash CHỈ có ở release)
+
+Release bật **R8 minify** — Flutter Gradle plugin set
+`releaseBuildType.isMinifyEnabled = true` (`FlutterPlugin.kt`), debug thì không.
+Vì vậy bug loại này **vô hình trong quá trình dev**. Ca thật đã gặp (2026-09-12):
+app cài được nhưng chết ở **mọi lần cold start**.
+
+```
+java.lang.RuntimeException: Failed to create an instance of
+  androidx.work.impl.WorkDatabase
+  at androidx.work.WorkManagerInitializer.b(...)
+```
+
+- `androidx.work` + `room` vào app như **transitive dependency của ads SDK**
+  (`play-services-ads`). App không hề dùng WorkManager, nhưng WorkManager tự init
+  qua `androidx.startup` trong một ContentProvider → chết **trước
+  `Application.onCreate()`**, Dart không kịp bắt (kể cả force-update dialog).
+- Room không gọi impl trực tiếp mà tạo bằng reflection
+  (`Class.forName("..._Impl").newInstance()`). R8 không thấy call graph này → xoá
+  `<init>()` dù consumer rule của Room vẫn giữ class + tên → `InstantiationException`.
+- Fix: `android/app/proguard-rules.pro`
+  (`-keep class * extends androidx.room.RoomDatabase { <init>(); }`) nối vào build
+  type release bằng `proguardFiles(...)` trong `android/app/build.gradle.kts`.
+- Guard: `tool/check_r8_keep.py` đọc `usage.txt` (R8 removed-code report) và **fail
+  build** nếu constructor bị xoá; chạy trong cả `build-release-apk.yml` và
+  `build-release-aab.yml`.
+
+**Nguyên tắc:** KHÔNG tắt minify để "cho qua" — giữ minify + keep rule đúng. Mọi
+thay đổi dependency phải verify bằng **cold start trên máy thật với release APK**,
+không phải bằng "build xanh".

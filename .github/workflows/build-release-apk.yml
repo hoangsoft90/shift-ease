@@ -139,6 +139,14 @@ jobs:
           flutter build apk "${ARGS[@]}"
           ls -lh build/app/outputs/flutter-apk/
 
+      - name: Verify R8 kept Room's reflective no-arg constructor
+        run: |
+          # Release-only failure mode (debug builds are not minified): R8 strips
+          # the unused <init>() Room reaches by reflection, so the app dies in
+          # androidx.startup before Application.onCreate() on every cold start.
+          # Reads R8's own removed-code report and fails if the ctor is gone.
+          python3 tool/check_r8_keep.py
+
       - name: Verify every built APK declares a valid AdMob app ID
         run: |
           set -e
