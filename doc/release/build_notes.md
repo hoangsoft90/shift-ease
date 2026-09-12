@@ -13,33 +13,44 @@
 
 ### 1.2 Lệnh build (thực thi bởi human/CI — không chạy trong sandbox)
 
-> ⚠️ **Lưu ý signing trước khi build release:** `android/app/build.gradle.kts`
-> hiện còn scaffold mặc định — buildType `release` ký bằng **debug keys**
-> (`signingConfig = signingConfigs.getByName("debug")`). Trước khi tạo AAB:
-> tạo keystore, thêm `signingConfigs.release` đọc từ `key.properties`
-> (gitignored — `android/.gitignore` đã sẵn rule `key.properties`, `*.keystore`,
-> `*.jks`), và trỏ buildType release vào nó. Build release còn debug-signed sẽ
-> bị Play Console từ chối ("signed in debug mode").
+> ✅ **Signing đã implement (2026-09-12)** trong `android/app/build.gradle.kts`:
+> `signingConfigs.release` được khai báo **chỉ khi** `android/key.properties`
+> tồn tại (gitignored — `android/.gitignore` đã có rule `key.properties`,
+> `*.keystore`, `*.jks`), đọc `storeFile`/`storePassword`/`keyAlias`/
+> `keyPassword`; `storeFile` resolve tương đối `android/`. Không có file này →
+> release build rơi về debug signing để QA vẫn cài được (Play sẽ từ chối
+> "signed in debug mode" — phải có keystore thật khi build AAB).
 >
-> Đã thêm `manifestPlaceholders["adsAppId"]` vào cả `release` lẫn `debug`,
-> dựa trên pubspec `admob.enable_ads`. Workflow CI mới (`build-release-apk.yml`)
-> có thể build release APK với ads tắt bằng cách truyền
-> `-PenableAds=false` — lúc đó APK không chứa AdMob APPLICATION_ID,
-> SDK tự tắt (không crash). Lệnh local tương đacon:
-> `flutter build apk --release -PenableAds=false`.
+> **Ads switch (2 nửa phải bật/tắt cùng nhau):**
+> - `--android-project-arg=enableAds=false` → Gradle blank
+>   `manifestPlaceholders["adsAppId"]`, APK không chứa AdMob APPLICATION_ID.
+> - `--dart-define=ENABLE_ADS=false` → `AppAdsConfig.enableAds=false`, Dart
+>   không bao giờ gọi `MobileAds.initialize()`.
+> Test ads: `--dart-define=TEST_ADS=false` chỉ khi unit ID production đã điền.
+>
+> Workflow `build-release-apk.yml` truyền cả hai (input `enable_ads`,
+> `test_ads` trên workflow_dispatch).
 
 ```bash
-flutter build appbundle --release          # AAB — preferred store artifact
-flutter build apk --release                # APK — QA trực tiếp nếu cần
+# AAB — artifact nộp Play (cần android/key.properties + keystore thật)
+flutter build appbundle --release
 
-# Release APK tanpa iklan (manifest AdMob APPLICATION_ID dikosongkan oleh
-# Gradle; SDK menerima kosong dan self-disable — tanpa crash):
-flutter build apk --release -PenableAds=false
+# Release APK cho QA, ads TẮT hoàn toàn (không có APPLICATION_ID trong manifest
+# + Dart không init SDK → không request nào; không crash)
+flutter build apk --release \
+  --android-project-arg=enableAds=false \
+  --dart-define=ENABLE_ADS=false
+
+# Release APK có ads thật (chỉ khi unit ID production đã điền trong ads_config.dart)
+flutter build apk --release --dart-define=TEST_ADS=false
 ```
 
 - Version tự lấy từ `pubspec.yaml` (`1.0.0+1` → versionName 1.0.0, versionCode 1) — không hard-code khác trong gradle.
 - Build type `release` phải không có debug flag (đã audit: `lib/` không có kDebugMode/mock/endpoint).
-- Gradle lazily membaca `provider.property("enableAds")` (tidak error jika tidak ada).
+- Gradle đọc `findProperty("enableAds")` (không lỗi khi không truyền → default `true`).
+- **Build bằng `flutter build apk`, KHÔNG chạy `./gradlew` trực tiếp**: repo không
+  commit Gradle wrapper (`android/.gitignore`) — flutter_tools inject wrapper đã pin
+  (Gradle 9.3.1) từ cache của nó.
 
 ### 1.3 Verify sau build (mỗi dòng PASS/FAIL/NOT RUN — human)
 

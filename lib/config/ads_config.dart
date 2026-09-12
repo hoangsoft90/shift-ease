@@ -4,12 +4,15 @@
 // Monetization: banner ads under the Jobs screen (Play Store + App Store).
 //
 // Three independent gates (all must be open for any ad to load):
-//   1. enableAds (pubspec `admob.enable_ads`, mirrored here) — hard master
-//      switch. When false the app NEVER initializes the AdMob SDK and NO ad
-//      placeholder ever reaches a native manifest. This is the flag you flip
-//      for a release APK that must ship without ads while the AdMob account
-//      is still being set up / while troubleshooting.
-//   2. testAds (pubspec `admob.test_ads`) — SDK/creative selection:
+//   1. enableAds (build-time `--dart-define=ENABLE_ADS=...`, mirrored in the
+//      pubspec `admob.enable_ads` docs) — hard master switch. When false the
+//      app NEVER initializes the AdMob SDK. This is the flag you flip for a
+//      release APK that must ship without ads while the AdMob account is still
+//      being set up / while troubleshooting. The matching native half is
+//      `--android-project-arg=enableAds=false` (blanks the manifest
+//      APPLICATION_ID); the release workflow passes both.
+//   2. testAds (build-time `--dart-define=TEST_ADS=...`) — SDK/creative
+//      selection:
 //      • true  → Google test ad unit IDs + sample APPLICATION_IDs (no real
 //        ad traffic, no invalid-traffic/LIMIT risk, no account limit).
 //      • false → production AdMob IDs below are used. Android units FILLED
@@ -27,18 +30,29 @@
 
 import 'dart:io' show Platform;
 
+/// Build-time defaults. Supplied by CI/local builds as
+///   --dart-define=ENABLE_ADS=false --dart-define=TEST_ADS=true
+/// Defaulting to `true` keeps plain `flutter run`/`flutter test` behavior
+/// (and every existing test) exactly as before.
+const bool _enableAdsFromBuild =
+    bool.fromEnvironment('ENABLE_ADS', defaultValue: true);
+const bool _testAdsFromBuild =
+    bool.fromEnvironment('TEST_ADS', defaultValue: true);
+
 /// Dart-side mirror of the pubspec `admob:` block (pubspec parsing of custom
 /// maps would need a hook; one place to flip keeps config debuggable).
 /// Mutable (not `const`) ONLY so tests can exercise both branches — they must
-/// restore defaults in tearDown. Production flips these from the defaults
-//   below: enableAds = false for a no-ad release; testAds = false for real
-//   ads once the AdMob IDs are filled in.
+/// restore defaults in tearDown. Production flips these from the build-time
+/// defaults below: enableAds = false for a no-ad release; testAds = false for
+/// real ads once the AdMob IDs are filled in — both WITHOUT editing this file:
+///   flutter build apk --release \
+///     --android-project-arg=enableAds=false --dart-define=ENABLE_ADS=false
 class AppAdsConfig {
   /// Master switch. When false the app never initializes the AdMob SDK.
-  static bool enableAds = true;
+  static bool enableAds = _enableAdsFromBuild;
 
   /// true = test mode (Google test IDs, sample app IDs). See file header.
-  static bool testAds = true;
+  static bool testAds = _testAdsFromBuild;
 }
 
 /// Hard block: whether ANY ad code should run at all on this build.

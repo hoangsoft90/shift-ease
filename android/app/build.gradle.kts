@@ -1,8 +1,50 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// ---------------------------------------------------------------------------
+// Ads master switch (2026-09-11)
+// ---------------------------------------------------------------------------
+// Read from a Gradle project property so CI can strip ads WITHOUT touching Dart:
+//   flutter build apk --release --android-project-arg=enableAds=false
+// (that flag is translated by flutter_tools into `-PenableAds=false`).
+// When false the AdMob APPLICATION_ID meta-data is blanked in the merged
+// manifest — the SDK has no app ID to initialize with and never requests an ad.
+// The Dart side is gated independently (AppAdsConfig.enableAds, fed by
+// `--dart-define=ENABLE_ADS=...`), so both halves must be flipped together;
+// the release workflow passes both flags.
+val enableAds: Boolean =
+    ((findProperty("enableAds") as? String) ?: "true").equals("false", ignoreCase = true)
+
+// Real AdMob Android application ID (AdMob console, 2026-09-11). Only a
+// manifest placeholder — WHICH ad unit serves is decided at runtime by
+// AppAdsConfig (testAds → Google's official test units).
+val adsAppId: String =
+    if (enableAds) "ca-app-pub-6917313063209470~6379119743" else ""
+
+// ---------------------------------------------------------------------------
+// Release signing — keystore never lives in the repo
+// ---------------------------------------------------------------------------
+// CI decodes the keystore from GitHub secrets and writes android/key.properties;
+// locally the file is gitignored (android/.gitignore covers key.properties,
+// *.keystore, *.jks). When it is absent, release builds fall back to the debug
+// signing config so `flutter build apk --release` still produces an installable
+// APK (debug-signed — fine for QA, NOT uploadable to Play).
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hasReleaseKeystore) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+// storeFile in key.properties is resolved relative to android/ (rootProject).
+val releaseStoreFile: File? =
+    keystoreProperties.getProperty("storeFile")?.let { rootProject.file(it) }
 
 android {
     namespace = "com.shiftease.shiftease"
@@ -39,29 +81,26 @@ android {
         versionName = flutter.versionName
     }
 
-    val enableAds: String by lazy {
-        // pubspec YAML  →  Gradle provider property.
-        // repo default `admob.enable_ads: true`; workflow dispatch or local
-        // `-PenableAds=false` flips it to ship a no-ad release APK without
-        // touching Dart code.
-        val raw = provider.property("enableAds").orNull
-        if (raw == null) "true" else raw
-    }
-
-    // Used ONLY for manifest placeholder selection; actual ad serving is
-    // decided at runtime by AppAdsConfig.enableAds + testAds + unit IDs.
-    val adsAppId: String by lazy {
-        val sample = "ca-app-pub-3940256099942544~3347511713"
-        val prod = "ca-app-pub-6917313063209470~6379119743"
-        if (enableAds == "false") "" // no ad ID shipped → SDK self-disables
-        else prod
+    signingConfigs {
+        // Only declared when a keystore is actually available — a half-filled
+        // release config would break every build on machines without secrets.
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storePassword = keystoreProperties.getProperty("storePassword")
+                storeFile = releaseStoreFile
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release-signed when android/key.properties exists (CI secrets or a
+            // local keystore); otherwise debug-signed so QA builds still work.
+            signingConfig =
+                if (hasReleaseKeystore) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
             manifestPlaceholders["adsAppId"] = adsAppId
         }
         debug {

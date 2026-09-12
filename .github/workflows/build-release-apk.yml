@@ -1,27 +1,37 @@
-# ShiftEase — Release APK build (ads-disabled, release keystore)
+# ShiftEase — Release APK build (release keystore, ads switchable)
 #
-# Builds a RELEASE APK signed with the project release keystore, with AdMob
-# APPLICATION_ID stripped from the manifest (-PenableAds=false). Intended for
-# QA/install on a real device when you want a production-flavoured build WITHOUT
-# ads (e.g. before the AdMob account is finalized, or for reviewer builds).
+# Produces a RELEASE-mode APK for device QA. Two independent switches, both
+# passed by this workflow (no Dart/Gradle edits needed):
 #
-# Two artifacts are uploaded:
-#   • shiftease-release-apk-signed.apk — signed (if keystore present; otherwise
-#     falls back to debug-signed so the run still produces an installable file)
-#   • shiftease-release-apk-unsigned.apk — from assembleRelease before signing,
-#     useful if you just want the raw Gradle output
+#   • enable_ads (default false) → the whole ad stack is off:
+#       --android-project-arg=enableAds=false  blanks the AdMob APPLICATION_ID
+#                                              in the merged manifest
+#       --dart-define=ENABLE_ADS=false         Dart never initializes the SDK
+#     Set it to true for a production-flavoured build — then test_ads decides
+#     whether Google test units or the real AdMob units serve.
 #
-# Secrets (set on the repo; agent does NOT create them):
-#   ANDROID_KEYSTORE_BASE64  — base64 of the .jks/.keystore file (REQUIRED to
-#                              produce a release-signed APK; without it the job
-#                              still runs but the APK is debug-signed)
+#   • test_ads (default true) → Google TEST ad units / sample app IDs
+#     (no real ad traffic, no invalid-traffic LIMIT risk on the AdMob account).
+#     Set false ONLY once production unit IDs are in lib/config/ads_config.dart.
+#
+# Signing: android/key.properties + android/release.keystore are written from
+# GitHub secrets. If ANDROID_KEYSTORE_BASE64 is absent the job still runs and
+# produces a DEBUG-signed release APK (installable for QA, NOT uploadable to
+# Play) and says so in the summary.
+#
+# Secrets (set by the repo owner in Settings → Secrets → Actions):
+#   ANDROID_KEYSTORE_BASE64     base64 of the .jks/.keystore
 #   ANDROID_KEYSTORE_PASSWORD
 #   ANDROID_KEY_ALIAS
 #   ANDROID_KEY_PASSWORD
 #
-# Play Console: release-signed APK is installable but preferred store artifact
-# is the AAB (use `flutter build appbundle --release` + Play App Signing).
-# This workflow produces an APK for device QA only.
+# Play Console: prefer an AAB (`flutter build appbundle --release`) + Play App
+# Signing for the actual store upload. This workflow's APK is for QA only.
+#
+# NOTE: build via `flutter build apk`, never `./gradlew`. The repo deliberately
+# does not commit the Gradle wrapper (android/.gitignore) — flutter_tools
+# injects the pinned wrapper (gradle 9.3.1) from its own cache, so a raw
+# ./gradlew invocation fails with "Missing gradlew".
 
 name: Build release APK (ads disabled)
 
@@ -33,166 +43,126 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - 'android/**'
-      - 'ios/**'
-      - 'tool/**'
-      - '.github/workflows/**'
+      - '.github/workflows/build-release-apk.yml'
   workflow_dispatch:
     inputs:
       enable_ads:
-        description: 'Pass -PenableAds=false to strip AdMob app ID (recommended for no-ad release QA)'
-        required: false
+        description: 'Ship ads in this build? (false = ads fully disabled)'
+        type: choice
+        options: ['false', 'true']
         default: 'false'
-      dry_run:
-        description: 'If true, skip signing and upload only the unsigned APK'
-        required: false
-        default: 'false'
+      test_ads:
+        description: 'Use Google test ad units? (set false only with real AdMob unit IDs)'
+        type: choice
+        options: ['true', 'false']
+        default: 'true'
 
 jobs:
   build-release-apk:
-    name: Build release APK (ads disabled)
+    name: Build release APK
     runs-on: ubuntu-latest
+    env:
+      # Push events have no inputs → default to an ads-disabled release QA build.
+      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'false' }}
+      TEST_ADS: ${{ github.event.inputs.test_ads || 'true' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Java 17 (temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Show pubspec admob block
-        run: |
-          echo "=== pubspec admob block ==="
-          awk '/^admob:/{f=1} f&&/^[^ ]/{if(!/^admob:/)exit} f' pubspec.yaml
-          echo "=========================="
+      - name: Analyze (fail fast before Gradle)
+        run: flutter analyze --fatal-warnings
+
+      - name: Run the full test suite (no artifact from a red suite)
+        run: flutter test test/ --reporter compact
 
       - name: Decode release keystore (if secret present)
         id: keystore
         env:
           KS_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          set -e
           if [ -n "$KS_BASE64" ]; then
-            echo "$KS_BASE64" | base64 -d > release.keystore
-            echo "present=true" >> $GITHUB_OUTPUT
-            echo "Keystore decoded ($(stat -c%s release.keystore) bytes)"
+            # android/.gitignore covers key.properties, *.keystore, *.jks —
+            # nothing here can be committed by accident.
+            printf '%s' "$KS_BASE64" | base64 -d > android/release.keystore
+            # Quoted heredoc: secrets containing $ or backticks are written
+            # verbatim instead of being expanded by the shell.
+            cat > android/key.properties <<'PROPS'
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.keystore
+          PROPS
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Keystore decoded ($(stat -c%s android/release.keystore) bytes)"
           else
-            echo "present=false" >> $GITHUB_OUTPUT
-            echo "::warning::ANDROID_KEYSTORE_BASE64 not set — APK will be debug-signed, not release-signed"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 not set — the release APK will be DEBUG-signed (installable for QA, not uploadable to Play)"
           fi
 
-      - name: Gradle properties (ads disabled for release QA)
-        id: props
-        run: |
-          ENABLED="${{ github.event.inputs.enable_ads || 'false' }}"
-          echo "enableAds=$ENABLED" >> $GITHUB_OUTPUT
-          echo "Passed enableAds=$ENABLED (false => manifest AdMob APPLICATION_ID stripped)"
-
-      - name: Gradle wrapper up-to-date check
-        run: |
-          if [ ! -f gradlew ]; then
-            echo "::error::Missing gradlew — cannot build (repo must ship the wrapper)"
-            exit 1
-          fi
-          chmod +x gradlew
-
-      - name: Build release APK (unsigned)
-        env:
-          ENABLED: ${{ steps.props.outputs.enableAds }}
-        run: |
-          ./gradlew -p android assembleRelease \
-            -PenableAds="$ENABLED" \
-            --no-daemon \
-            -q
-          echo "=== APK outputs ==="
-          find android/app/build/outputs/apk/release -name '*.apk' -exec ls -lh {} \;
-
-      - name: Copy unsigned APK for upload
-        id: unsigned
-        run: |
-          APK=$(find android/app/build/outputs/apk/release -name '*.apk' -print -quit)
-          cp "$APK" shiftease-release-apk-unsigned.apk
-          echo "path=$APK" >> $GITHUB_OUTPUT
-          echo "unsigned=$APK" >> $GITHUB_OUTPUT
-
-      - name: Sign release APK with release keystore
-        id: sign
-        if: steps.keystore.outputs.present == 'true' && github.event.inputs.dry_run != 'true'
-        env:
-          KS_FILE: release.keystore
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Build release APK
         run: |
           set -e
-          UNSIGNED="${{ steps.unsigned.outputs.unsigned }}"
-          SIGNED="shiftease-release-apk-signed.apk"
-          # Use jarsigner for maximum compatibility with either .jks or .keystore.
-          jarsigner -verbose \
-            -storepass "$KS_PASS" -alias "$KS_ALIAS" -keypass "$KS_KEY_PASS" \
-            -keystore "$KS_FILE" \
-            "$UNSIGNED" "$KS_ALIAS" \
-            && mv "$UNSIGNED" "$SIGNED"
-          echo "signed_path=$SIGNED" >> $GITHUB_OUTPUT
-          echo "APK signed with release keystore"
+          ARGS=(--release)
+          if [ "$ENABLE_ADS" = "false" ]; then
+            ARGS+=(--android-project-arg=enableAds=false)
+          fi
+          ARGS+=(--dart-define=ENABLE_ADS="$ENABLE_ADS" --dart-define=TEST_ADS="$TEST_ADS")
+          echo "flutter build apk ${ARGS[*]}"
+          flutter build apk "${ARGS[@]}"
+          ls -lh build/app/outputs/flutter-apk/
 
-      - name: Verify APK signature (fail CI if still debug-signed when keystore present)
-        if: steps.keystore.outputs.present == 'true'
-        env:
-          SIGNED: ${{ steps.sign.outputs.signed_path }}
+      - name: Verify ads are actually stripped from the APK
+        if: env.ENABLE_ADS == 'false'
         run: |
           set -e
-          if [ -z "$SIGNED" ]; then
-            echo "::error::No signed APK path — signing step did not produce an artifact"
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          # The publisher ID appears verbatim in the manifest string pool when
+          # the placeholder was not blanked. `strings` reads the binary AXML.
+          if unzip -p "$APK" AndroidManifest.xml | strings | grep -q 'ca-app-pub-6917313063209470'; then
+            echo "::error::Ads-disabled build still ships the AdMob APPLICATION_ID — enableAds was not honoured"
             exit 1
           fi
-          # Find apksigner on the runner.
-          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          echo "OK: no AdMob APPLICATION_ID in the merged manifest"
+
+      - name: Verify APK signature
+        run: |
+          set -e
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$APKSIGNER" ]; then
-            echo "::warning::apksigner not found — cannot verify; upload still proceeds"
+            echo "::warning::apksigner not found — skipping signature verification"
             exit 0
           fi
-          "$APKSIGNER" verify --print-certs "$SIGNED" \
-            | tee /tmp/apksigner-certs.txt
+          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt
           if grep -q "CN=Android Debug" /tmp/apksigner-certs.txt; then
-            echo "::error::APK is signed with the DEBUG keystore — release signing did not apply"
-            exit 1
+            if [ "${{ steps.keystore.outputs.present }}" = "true" ]; then
+              echo "::error::APK is still DEBUG-signed although a release keystore was provided — check key.properties"
+              exit 1
+            fi
+            echo "::warning::APK is debug-signed (no release keystore configured) — fine for QA, not for Play"
+          else
+            echo "::notice::APK is release-signed"
           fi
-          echo "::notice::APK is release-signed (non-debug CN)"
 
-      - name: Verify no AdMob app ID in manifest (ads-disabled supply-chain)
-        if: steps.props.outputs.enableAds == 'false'
-        run: |
-          set -e
-          # Find the APK we will upload (signed if present, else unsigned).
-          APK="${{ steps.sign.outputs.signed_path }}"
-          if [ -z "$APK" ]; then
-            APK="${{ steps.unsigned.outputs.unsigned }}"
-          fi
-          # Unzip only the manifest (small, fast).
-          TMPDIR=$(mktemp -d)
-          unzip -q -o "$APK" AndroidManifest.xml -d "$TMPDIR"
-          grep -n "com.google.android.gms.ads.APPLICATION_ID" "$TMPDIR/AndroidManifest.xml" \
-            || { echo "::error::APK manifest missing AdMob APPLICATION_ID meta-data — unexpected"; exit 1; }
-          VALUE=$(grep -o 'android:value="[^"]*"' "$TMPDIR/AndroidManifest.xml" \
-            | grep -o '"[^"]*"$' | tr -d '"' | head -1)
-          if [ -n "$VALUE" ]; then
-            echo "::error::Ads-disabled build still shipped an AdMob APPLICATION_ID ($VALUE) — enableAds was not honoured"
-            exit 1
-          fi
-          echo "APK manifest AdMob APPLICATION_ID (should be empty): '$VALUE' — OK"
-          rm -rf "$TMPDIR"
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
         with:
-          name: shiftease-release-apk-signed
-          path: shiftease-release-apk-signed.apk
-          if-no-files-found: ignore
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: shiftease-release-apk-unsigned
-          path: shiftease-release-apk-unsigned.apk
+          name: shiftease-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
