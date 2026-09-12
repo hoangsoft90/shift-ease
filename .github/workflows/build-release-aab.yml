@@ -173,21 +173,48 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "OK: AAB signed with the ShiftEase release keystore"
 
-      - name: Verify ads are actually stripped from the AAB
+      - name: Verify ads are actually stripped from the bundle
         if: env.ENABLE_ADS == 'false'
         run: |
           set -e
           AAB=build/app/outputs/bundle/release/app-release.aab
-          # base/manifest/AndroidManifest.xml inside the bundle is binary AXML;
-          # the publisher ID appears verbatim in its string pool when the
-          # Gradle placeholder was not blanked.
-          if unzip -p "$AAB" base/manifest/AndroidManifest.xml | strings | grep -q 'ca-app-pub-6917313063209470'; then
-            echo "::error::Ads-disabled bundle still ships the AdMob APPLICATION_ID — enableAds was not honoured"
+
+          # --- authoritative check: the MERGED manifest Gradle actually fed to
+          # the bundle task. Text (not protobuf/AXML), so grepping it is exact.
+          MERGED=$(find android/app/build/intermediates -path '*merged_manifest*release*' -name AndroidManifest.xml | head -1 || true)
+          if [ -z "$MERGED" ]; then
+            echo "::error::Merged release manifest not found — cannot prove ads were stripped"
             exit 1
           fi
-          echo "OK: no AdMob APPLICATION_ID in the merged manifest"
+          echo "merged manifest: $MERGED"
+          echo "--- AdMob meta-data as merged (value must be empty) ---"
+          grep -n "com.google.android.gms.ads.APPLICATION_ID" -A5 "$MERGED" || echo "<meta-data absent>"
+          # The blanked placeholder leaves android:value=""; if the property had
+          # not been honoured the real publisher ID would still be here.
+          if grep -q 'ca-app-pub-' "$MERGED"; then
+            echo "::error::Ads-disabled build still merged an AdMob publisher ID — enableAds was not honoured"
+            exit 1
+          fi
+          echo "OK: no publisher ID in the merged manifest"
 
+          # --- defence in depth: the bundled (protobuf) manifest must not carry
+          # the publisher ID either. Printed unconditionally so a failure is
+          # diagnosable from the log alone.
+          unzip -p "$AAB" base/manifest/AndroidManifest.xml > /tmp/aab-manifest.bin
+          strings -n 6 /tmp/aab-manifest.bin > /tmp/aab-manifest.txt
+          echo "bundle manifest: $(wc -c < /tmp/aab-manifest.bin) bytes"
+          echo "--- ads-related strings in the bundled manifest ---"
+          grep -n -i "ca-app-pub\|gms.ads" /tmp/aab-manifest.txt || echo "<none>"
+          if grep -q 'ca-app-pub-6917313063209470' /tmp/aab-manifest.txt; then
+            echo "::error::Bundled manifest still references the AdMob publisher ID"
+            exit 1
+          fi
+          echo "OK: no AdMob publisher ID in the bundled manifest"
+
+      # if: always() — keep the bundle available even when a verification step
+      # fails, so the failing run is diagnosable from the artifact itself.
       - name: Upload AAB artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: shiftease-release-aab
