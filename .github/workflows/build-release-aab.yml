@@ -25,13 +25,12 @@
 # Play only tells you about it at upload time.
 #
 # Ads switches (same pair as build-release-apk.yml — no code edits needed):
-#   • enable_ads (default false) → ads fully off:
-#       --android-project-arg=enableAds=false  blanks the AdMob APPLICATION_ID
-#       --dart-define=ENABLE_ADS=false         Dart never initializes the SDK
-#     Set it to true for a production ads build — then test_ads decides whether
-#     Google TEST units or the real units serve.
-#   • test_ads (default true) → Google TEST ad units. Set false ONLY once the
-#     production unit IDs are filled in lib/config/ads_config.dart.
+#   • enable_ads (default TRUE) → ads ON, the production AdMob APPLICATION_ID
+#     stays in the packed manifest and Dart initializes the SDK.
+#   • test_ads (default FALSE) → serve the REAL AdMob unit IDs. Set it back to
+#     true to build with Google TEST units instead.
+# The packed manifest is verified against whichever way these are set, so a
+# misread Gradle property fails the run rather than reaching Play.
 #
 # Play Console notes:
 #   • Keep Play App Signing ENABLED. This keystore is then the UPLOAD key; the
@@ -53,29 +52,30 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - 'android/**'
+      - 'tool/**'
       - '.github/workflows/build-release-aab.yml'
   workflow_dispatch:
     inputs:
       enable_ads:
         description: 'Ship ads in this bundle? (false = ads fully disabled)'
         type: choice
-        options: ['false', 'true']
-        default: 'false'
-      test_ads:
-        description: 'Use Google test ad units? (set false only with real AdMob unit IDs)'
-        type: choice
         options: ['true', 'false']
         default: 'true'
+      test_ads:
+        description: 'Use Google test ad units? (true = test ads, no real ad traffic)'
+        type: choice
+        options: ['false', 'true']
+        default: 'false'
 
 jobs:
   build-release-aab:
     name: Build release AAB
     runs-on: ubuntu-latest
     env:
-      # Push events have no inputs → ads-off bundle by default (matches the
-      # release-APK workflow; flip to 'true' from the Actions UI for ads).
-      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'false' }}
-      TEST_ADS: ${{ github.event.inputs.test_ads || 'true' }}
+      # Push events have no inputs → the store-shaped default: ads ON, serving
+      # the REAL AdMob units (test_ads=false).
+      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'true' }}
+      TEST_ADS: ${{ github.event.inputs.test_ads || 'false' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -173,43 +173,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "OK: AAB signed with the ShiftEase release keystore"
 
-      - name: Verify ads are actually stripped from the bundle
-        if: env.ENABLE_ADS == 'false'
+      - name: Verify the packed manifest matches the ads switch
         run: |
           set -e
           AAB=build/app/outputs/bundle/release/app-release.aab
-
-          # --- authoritative check: the MERGED manifest Gradle actually fed to
-          # the bundle task. Text (not protobuf/AXML), so grepping it is exact.
-          MERGED=$(find android/app/build/intermediates -path '*merged_manifest*release*' -name AndroidManifest.xml | head -1 || true)
-          if [ -z "$MERGED" ]; then
-            echo "::error::Merged release manifest not found — cannot prove ads were stripped"
-            exit 1
-          fi
-          echo "merged manifest: $MERGED"
-          echo "--- AdMob meta-data as merged (value must be empty) ---"
-          grep -n "com.google.android.gms.ads.APPLICATION_ID" -A5 "$MERGED" || echo "<meta-data absent>"
-          # The blanked placeholder leaves android:value=""; if the property had
-          # not been honoured the real publisher ID would still be here.
-          if grep -q 'ca-app-pub-' "$MERGED"; then
-            echo "::error::Ads-disabled build still merged an AdMob publisher ID — enableAds was not honoured"
-            exit 1
-          fi
-          echo "OK: no publisher ID in the merged manifest"
-
-          # --- defence in depth: the bundled (protobuf) manifest must not carry
-          # the publisher ID either. Printed unconditionally so a failure is
-          # diagnosable from the log alone.
-          unzip -p "$AAB" base/manifest/AndroidManifest.xml > /tmp/aab-manifest.bin
-          strings -n 6 /tmp/aab-manifest.bin > /tmp/aab-manifest.txt
-          echo "bundle manifest: $(wc -c < /tmp/aab-manifest.bin) bytes"
-          echo "--- ads-related strings in the bundled manifest ---"
-          grep -n -i "ca-app-pub\|gms.ads" /tmp/aab-manifest.txt || echo "<none>"
-          if grep -q 'ca-app-pub-6917313063209470' /tmp/aab-manifest.txt; then
-            echo "::error::Bundled manifest still references the AdMob publisher ID"
-            exit 1
-          fi
-          echo "OK: no AdMob publisher ID in the bundled manifest"
+          if [ "$ENABLE_ADS" = "false" ]; then EXPECT=absent; else EXPECT=present; fi
+          # The bundle stores a protobuf manifest; the checker reads that entry
+          # (not the root AndroidManifest.xml) in both string-pool encodings.
+          python3 tool/check_manifest_ads.py "$AAB" --expect="$EXPECT"
 
       # if: always() — keep the bundle available even when a verification step
       # fails, so the failing run is diagnosable from the artifact itself.

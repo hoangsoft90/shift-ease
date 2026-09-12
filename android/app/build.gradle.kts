@@ -18,8 +18,13 @@ plugins {
 // The Dart side is gated independently (AppAdsConfig.enableAds, fed by
 // `--dart-define=ENABLE_ADS=...`), so both halves must be flipped together;
 // the release workflow passes both flags.
+// Ads are ON unless the property is explicitly the string "false" (unset or
+// unrecognised values keep ads on — the safe default for a monetised app).
+// NOTE: this once read `...equals("false")`, which assigned `true` exactly when
+// ads were being disabled, so `-PenableAds=false` shipped the production app id
+// and builds without the flag shipped none. Keep the polarity explicit.
 val enableAds: Boolean =
-    ((findProperty("enableAds") as? String) ?: "true").equals("false", ignoreCase = true)
+    (((findProperty("enableAds") as? String) ?: "true").trim().lowercase() != "false")
 
 // Real AdMob Android application ID (AdMob console, 2026-09-11). Only a
 // manifest placeholder — WHICH ad unit serves is decided at runtime by

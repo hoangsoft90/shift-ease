@@ -3,16 +3,18 @@
 # Produces a RELEASE-mode APK for device QA. Two independent switches, both
 # passed by this workflow (no Dart/Gradle edits needed):
 #
-#   • enable_ads (default false) → the whole ad stack is off:
+#   • enable_ads (default TRUE) → ads ON. The AdMob APPLICATION_ID stays in the
+#     packed manifest and Dart initializes the SDK. Setting it to false strips
+#     both halves:
 #       --android-project-arg=enableAds=false  blanks the AdMob APPLICATION_ID
-#                                              in the merged manifest
 #       --dart-define=ENABLE_ADS=false         Dart never initializes the SDK
-#     Set it to true for a production-flavoured build — then test_ads decides
-#     whether Google test units or the real AdMob units serve.
 #
-#   • test_ads (default true) → Google TEST ad units / sample app IDs
-#     (no real ad traffic, no invalid-traffic LIMIT risk on the AdMob account).
-#     Set false ONLY once production unit IDs are in lib/config/ads_config.dart.
+#   • test_ads (default FALSE) → serve the REAL AdMob unit IDs from
+#     lib/config/ads_config.dart. Set true for Google TEST units (no real ad
+#     traffic, no invalid-traffic LIMIT risk on the AdMob account).
+#
+# Both switches are asserted against the built artifact afterwards, so a Gradle
+# property that is misread fails the run instead of shipping a broken ad stack.
 #
 # Signing: android/key.properties + android/release.keystore are written from
 # GitHub secrets. If ANDROID_KEYSTORE_BASE64 is absent the job still runs and
@@ -33,7 +35,7 @@
 # injects the pinned wrapper (gradle 9.3.1) from its own cache, so a raw
 # ./gradlew invocation fails with "Missing gradlew".
 
-name: Build release APK (ads disabled)
+name: Build release APK
 
 on:
   push:
@@ -43,28 +45,30 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - 'android/**'
+      - 'tool/**'
       - '.github/workflows/build-release-apk.yml'
   workflow_dispatch:
     inputs:
       enable_ads:
         description: 'Ship ads in this build? (false = ads fully disabled)'
         type: choice
-        options: ['false', 'true']
-        default: 'false'
-      test_ads:
-        description: 'Use Google test ad units? (set false only with real AdMob unit IDs)'
-        type: choice
         options: ['true', 'false']
         default: 'true'
+      test_ads:
+        description: 'Use Google test ad units? (true = test ads, no real ad traffic)'
+        type: choice
+        options: ['false', 'true']
+        default: 'false'
 
 jobs:
   build-release-apk:
     name: Build release APK
     runs-on: ubuntu-latest
     env:
-      # Push events have no inputs → default to an ads-disabled release QA build.
-      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'false' }}
-      TEST_ADS: ${{ github.event.inputs.test_ads || 'true' }}
+      # Push events have no inputs → the production-flavoured default: ads ON,
+      # serving the REAL AdMob units (test_ads=false).
+      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'true' }}
+      TEST_ADS: ${{ github.event.inputs.test_ads || 'false' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,18 +129,14 @@ jobs:
           flutter build apk "${ARGS[@]}"
           ls -lh build/app/outputs/flutter-apk/
 
-      - name: Verify ads are actually stripped from the APK
-        if: env.ENABLE_ADS == 'false'
+      - name: Verify the packed manifest matches the ads switch
         run: |
           set -e
           APK=build/app/outputs/flutter-apk/app-release.apk
-          # The publisher ID appears verbatim in the manifest string pool when
-          # the placeholder was not blanked. `strings` reads the binary AXML.
-          if unzip -p "$APK" AndroidManifest.xml | strings | grep -q 'ca-app-pub-6917313063209470'; then
-            echo "::error::Ads-disabled build still ships the AdMob APPLICATION_ID — enableAds was not honoured"
-            exit 1
-          fi
-          echo "OK: no AdMob APPLICATION_ID in the merged manifest"
+          if [ "$ENABLE_ADS" = "false" ]; then EXPECT=absent; else EXPECT=present; fi
+          # Ground truth, in both UTF-8 and UTF-16 string-pool encodings: an
+          # inverted Gradle property fails whichever way this is run.
+          python3 tool/check_manifest_ads.py "$APK" --expect="$EXPECT"
 
       - name: Verify APK signature
         run: |

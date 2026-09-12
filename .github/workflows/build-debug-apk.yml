@@ -27,6 +27,7 @@ on:
       - 'lib/**'
       - 'android/**'
       - 'pubspec.yaml'
+      - 'tool/**'
       - '.github/workflows/build-debug-apk.yml'
   workflow_dispatch:
 
@@ -65,6 +66,17 @@ jobs:
       # keystore secrets required. Minify/R8 not applicable to debug.
       - name: Build debug APK
         run: flutter build apk --debug
+
+      - name: Verify the packed manifest carries the AdMob APPLICATION_ID
+        run: |
+          set -e
+          # No ads flags are passed here, so the Gradle property falls back to
+          # true: this APK must ship the production APPLICATION_ID. When the
+          # property was inverted this build silently carried an EMPTY app id,
+          # which does not crash — it just makes every ad fail to load, so the
+          # assertion is worth its few seconds.
+          python3 tool/check_manifest_ads.py \
+            build/app/outputs/flutter-apk/app-debug.apk --expect=present
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

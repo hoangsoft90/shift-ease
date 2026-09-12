@@ -49,17 +49,19 @@ flutter_launcher_icons:
   adaptive_icon_background: "#1E3A5F"
   adaptive_icon_foreground: "assets/icon/shiftease_icon_foreground.png"
 
-# AdMob defaults (2026-09-12). NOTHING reads this block at runtime — it
-# records the defaults of lib/config/ads_config.dart, which every build can
-# override without editing code:
-#   --dart-define=TEST_ADS=false     → use the production AdMob unit IDs
-#                                      (ONLY once they are filled in below);
-#                                      default true = Google TEST units, no
-#                                      real ad traffic, no AdMob LIMIT risk.
+# AdMob (2026-09-12). NOTHING reads this block at runtime — it documents the
+# code defaults in lib/config/ads_config.dart. Every build overrides them
+# without editing code:
+#   --dart-define=TEST_ADS=false     → production AdMob unit IDs (real ads).
+#                                      Dart default is true (Google test units,
+#                                      no real traffic, no LIMIT risk); the
+#                                      release APK/AAB workflows pass false.
 #   --dart-define=ENABLE_ADS=false   → ad stack fully off; pair it with the
 #                                      native half `--android-project-arg=
 #                                      enableAds=false` so no AdMob
 #                                      APPLICATION_ID ships in the manifest.
+# Both halves are asserted against the built artifact by
+# tool/check_manifest_ads.py — a misread Gradle property fails CI.
 admob:
   test_ads: true
   enable_ads: true

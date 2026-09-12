@@ -39,7 +39,21 @@
 >   `manifestPlaceholders["adsAppId"]`, APK không chứa AdMob APPLICATION_ID.
 > - `--dart-define=ENABLE_ADS=false` → `AppAdsConfig.enableAds=false`, Dart
 >   không bao giờ gọi `MobileAds.initialize()`.
-> Test ads: `--dart-define=TEST_ADS=false` chỉ khi unit ID production đã điền.
+> Test ads: `--dart-define=TEST_ADS=true` để dùng Google test units;
+> `false` (mặc định của workflow release) = ads thật, unit ID production.
+>
+> ⚠️ **Bug polarity đã sửa (2026-09-12).** Bản đầu của cờ này viết
+> `...equals("false")` nên gán `enableAds = true` **đúng lúc** đang tắt ads:
+> `-PenableAds=false` vẫn ship APPLICATION_ID production, còn build KHÔNG
+> truyền `-P` (debug APK) lại ship app ID **rỗng** — ads không bao giờ load mà
+> không crash, rất khó phát hiện. Cờ giờ đọc: ads BẬT trừ khi property là đúng
+> chuỗi `false`.
+>
+> Lý do bug lọt qua được: check cũ dùng `strings | grep` trên AXML — string pool
+> của manifest APK là **UTF-16**, nên `strings` không thấy ID và báo "OK" giả.
+> Giờ cả 3 workflow verify bằng `tool/check_manifest_ads.py` (đọc entry đúng của
+> APK/AAB, dò cả UTF-8/UTF-16LE/BE, assert `--expect=present|absent` theo cờ) →
+> property bị đọc sai sẽ fail ngay ở cả hai chiều.
 >
 > Workflow `build-release-apk.yml` (APK) và `build-release-aab.yml` (AAB) truyền
 > cả hai (input `enable_ads`, `test_ads` trên workflow_dispatch).
@@ -53,9 +67,12 @@
 > Nhớ bump `version:` trong `pubspec.yaml` trước mỗi lần upload — Play từ chối
 > versionCode trùng.
 
-> ℹ️ **Mặc định `enable_ads=false`** cho cả AAB lẫn APK release (an toàn nhất —
-> không ship ads khi chưa chốt với Play). Khi muốn bản có ads thật: dispatch
-> workflow với `enable_ads=true` + `test_ads=false`.
+> ℹ️ **Mặc định (2026-09-12): `enable_ads=true` + `test_ads=false`** cho cả APK
+> lẫn AAB release — tức bản release phục vụ **ads thật** (đúng cấu hình sẽ lên
+> store). Muốn bản không quảng cáo: dispatch `enable_ads=false`; muốn ads test:
+> dispatch `test_ads=true`. Debug APK (`build-debug-apk.yml`) giữ
+> `test_ads=true` (Dart default) — chỉ xem ads test, không tốn inventory thật.
+> Debug APK verify riêng rằng manifest **có** APPLICATION_ID production.
 
 ```bash
 # AAB — artifact nộp Play (cần android/key.properties + keystore thật)
