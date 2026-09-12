@@ -61,6 +61,11 @@ on:
         type: choice
         options: ['false', 'true']
         default: 'false'
+      split_per_abi:
+        description: 'Build per-ABI APKs instead of one fat APK (much smaller downloads)'
+        type: choice
+        options: ['false', 'true']
+        default: 'false'
 
 jobs:
   build-release-apk:
@@ -120,46 +125,60 @@ jobs:
           fi
 
       - name: Build release APK
+        env:
+          SPLIT: ${{ github.event.inputs.split_per_abi || 'false' }}
         run: |
           set -e
-          echo "flutter build apk --release --dart-define=ENABLE_ADS=$ENABLE_ADS --dart-define=TEST_ADS=$TEST_ADS"
-          flutter build apk --release \
-            --dart-define=ENABLE_ADS="$ENABLE_ADS" \
-            --dart-define=TEST_ADS="$TEST_ADS"
+          ARGS=(--release)
+          # Per-ABI APKs are ~1/3 the size of the fat APK (which carries
+          # armeabi-v7a + arm64-v8a + x86_64): smaller store downloads, and QA
+          # installs that actually finish over a slow link.
+          if [ "$SPLIT" = "true" ]; then ARGS+=(--split-per-abi); fi
+          ARGS+=(--dart-define=ENABLE_ADS="$ENABLE_ADS" --dart-define=TEST_ADS="$TEST_ADS")
+          echo "flutter build apk ${ARGS[*]}"
+          flutter build apk "${ARGS[@]}"
           ls -lh build/app/outputs/flutter-apk/
 
-      - name: Verify the packed manifest declares a valid AdMob app ID
+      - name: Verify every built APK declares a valid AdMob app ID
         run: |
+          set -e
           # Parses the real AXML attribute VALUE (a string-pool search could not
           # tell an empty android:value="" from one that appears elsewhere —
           # and an empty value is a guaranteed launch crash).
-          python3 tool/check_manifest_ads.py build/app/outputs/flutter-apk/app-release.apk
+          for apk in build/app/outputs/flutter-apk/*release.apk; do
+            python3 tool/check_manifest_ads.py "$apk"
+          done
 
       - name: Verify APK signature
         run: |
           set -e
-          APK=build/app/outputs/flutter-apk/app-release.apk
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
           if [ -z "$APKSIGNER" ]; then
             echo "::warning::apksigner not found — skipping signature verification"
             exit 0
           fi
-          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt
-          if grep -q "CN=Android Debug" /tmp/apksigner-certs.txt; then
-            if [ "${{ steps.keystore.outputs.present }}" = "true" ]; then
-              echo "::error::APK is still DEBUG-signed although a release keystore was provided — check key.properties"
-              exit 1
+          for APK in build/app/outputs/flutter-apk/*release.apk; do
+            echo "=== $APK ==="
+            "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt
+            if grep -q "CN=Android Debug" /tmp/apksigner-certs.txt; then
+              if [ "${{ steps.keystore.outputs.present }}" = "true" ]; then
+                echo "::error::$APK is still DEBUG-signed although a release keystore was provided — check key.properties"
+                exit 1
+              fi
+              echo "::warning::$APK is debug-signed (no release keystore configured) — fine for QA, not for Play"
+            else
+              echo "::notice::$APK is release-signed"
             fi
-            echo "::warning::APK is debug-signed (no release keystore configured) — fine for QA, not for Play"
-          else
-            echo "::notice::APK is release-signed"
-          fi
+          done
 
-      - name: Upload release APK
+      - name: Upload release APK(s)
         uses: actions/upload-artifact@v4
         with:
           name: shiftease-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          # Fat build → app-release.apk; --split-per-abi → app-<abi>-release.apk.
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
           retention-days: 30
