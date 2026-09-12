@@ -1,15 +1,28 @@
 # P8.3 / P8.4 — Release Build Notes (Android signed AAB / iOS archive)
 
 > Nguồn: `phases/P8_release_preparation.md` §3–§4 · `plan_p8.md` §P8.3/P8.4.
-> **Trạng thái tổng: BLOCKED — needs signing keys (human/CI).** Các bước dưới đây là checklist thực thi; agent không tự chạy và không PASS giả.
+> **Trạng thái ký/CI: DONE (2026-09-12)** — keystore release cố định đã tạo, 4 GitHub
+> Actions secrets đã set, workflow `build-release-aab.yml` build + **verify chữ ký
+> release** trước khi upload artifact. **Trạng thái verify trên máy thật: vẫn NOT RUN**
+> (persistently 15 rows ở §1.3 — cần thiết bị thật; agent không tự PASS giả).
 
 ## Part 1 — Android (P8.3)
 
 ### 1.1 Điều kiện
 
-- [ ] Keystore release (+ password + alias) — **human giữ, KHÔNG commit vào repo** (NEVER list)
-- [ ] `key.properties` (local, gitignored) hoặc secret trong CI (GitHub Actions secrets)
-- [ ] CI hoặc máy human có Flutter + JDK 17
+- [x] Keystore release — **đã tạo 2026-09-12, KHÔNG commit vào repo** (nằm trong
+      GitHub Actions secrets). Alias `shiftease`, PKCS12, RSA 2048, hạn dùng
+      2054 (Play yêu cầu key còn hạn ít nhất tới 2033-10-22).
+      Cert SHA-256 (dùng để đối chiếu Play App Signing):
+      `A9:FF:7F:7C:47:A5:A4:9F:FA:A1:48:75:00:2A:D3:F2:13:DE:B0:48:42:4D:3A:E0:EB:ED:1A:0D:EA:DD:ED:18`
+- [x] Secrets trong CI: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+      `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (đã set trên repo;
+      `key.properties` được workflow sinh ra trong runner, local vẫn gitignored)
+- [x] CI có Flutter + JDK 17 (2 workflow release: APK + AAB)
+
+> ⚠️ **KHÔNG tạo lại keystore.** Đổi key = đổi upload key → Play từ chối mọi
+> version sau đó ("signed in debug mode" / key mismatch). Backup `.jks` + mật khẩu
+> ra ngoài máy (password manager / USB) trước khi publish lần đầu.
 
 ### 1.2 Lệnh build (thực thi bởi human/CI — không chạy trong sandbox)
 
@@ -28,8 +41,21 @@
 >   không bao giờ gọi `MobileAds.initialize()`.
 > Test ads: `--dart-define=TEST_ADS=false` chỉ khi unit ID production đã điền.
 >
-> Workflow `build-release-apk.yml` truyền cả hai (input `enable_ads`,
-> `test_ads` trên workflow_dispatch).
+> Workflow `build-release-apk.yml` (APK) và `build-release-aab.yml` (AAB) truyền
+> cả hai (input `enable_ads`, `test_ads` trên workflow_dispatch).
+>
+> **AAB cho Play:** workflow `build-release-aab.yml` chạy khi push lên `main`
+> (và có thể dispatch tay): decode keystore từ secrets → `flutter build
+> appbundle --release` → **verify chữ ký bằng `jarsigner`/`keytool`** và
+> **fail CI** nếu AAB là debug-signed hoặc signer không phải `CN=ShiftEase`.
+> Artifact: `shiftease-release-aab` → upload trực tiếp lên Play Console
+> (Play App Signing nên bật; keystore này là **upload key**).
+> Nhớ bump `version:` trong `pubspec.yaml` trước mỗi lần upload — Play từ chối
+> versionCode trùng.
+
+> ℹ️ **Mặc định `enable_ads=false`** cho cả AAB lẫn APK release (an toàn nhất —
+> không ship ads khi chưa chốt với Play). Khi muốn bản có ads thật: dispatch
+> workflow với `enable_ads=true` + `test_ads=false`.
 
 ```bash
 # AAB — artifact nộp Play (cần android/key.properties + keystore thật)

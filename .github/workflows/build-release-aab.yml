@@ -1,0 +1,196 @@
+# ShiftEase — Release AAB build (Play Store upload artifact)
+#
+# Produces a RELEASE-signed Android App Bundle for Google Play.
+#
+# WHY THIS EXISTS: uploading a debug-signed artifact makes Play reject the
+# bundle with "You uploaded an APK or Android App Bundle that was signed in
+# debug mode. You need to sign your APK or Android App Bundle in release mode."
+# This workflow signs the AAB with the project's FIXED release keystore, which
+# lives only in GitHub Actions secrets — so every build is signed by the SAME
+# key and the bundle is always uploadable.
+#
+# Keystore (created 2026-09-12, DO NOT regenerate — changing it breaks the
+# upload key and Play will reject future versions):
+#   alias      : shiftease
+#   store pass : (ANDROID_KEYSTORE_PASSWORD secret)
+#   key pass   : (ANDROID_KEY_PASSWORD secret)
+#   cert SHA-256:
+#     A9:FF:7F:7C:47:A5:A4:9F:FA:A1:48:75:00:2A:D3:F2:13:DE:B0:48:42:4D:3A:E0:EB:ED:1A:0D:EA:DD:ED:18
+#
+# Secrets used (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+#   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# The job FAILS FAST with an actionable error when the keystore is missing —
+# an unsigned or debug-signed bundle is worse than no artifact at all, because
+# Play only tells you about it at upload time.
+#
+# Ads switches (same pair as build-release-apk.yml — no code edits needed):
+#   • enable_ads (default false) → ads fully off:
+#       --android-project-arg=enableAds=false  blanks the AdMob APPLICATION_ID
+#       --dart-define=ENABLE_ADS=false         Dart never initializes the SDK
+#     Set it to true for a production ads build — then test_ads decides whether
+#     Google TEST units or the real units serve.
+#   • test_ads (default true) → Google TEST ad units. Set false ONLY once the
+#     production unit IDs are filled in lib/config/ads_config.dart.
+#
+# Play Console notes:
+#   • Keep Play App Signing ENABLED. This keystore is then the UPLOAD key; the
+#     app signing key is held by Google. If this key is ever lost, Play can
+#     reset the upload key — but the app signing key can never be changed.
+#   • `version` in pubspec.yaml must be bumped before each new upload
+#     (currently 1.0.0+1) — Play rejects a duplicate versionCode.
+#   • Build via `flutter build appbundle`, never `./gradlew`: the repo does not
+#     commit the Gradle wrapper (android/.gitignore) — flutter_tools injects the
+#     pinned one from its own cache.
+
+name: Build release AAB (Play Store)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - '.github/workflows/build-release-aab.yml'
+  workflow_dispatch:
+    inputs:
+      enable_ads:
+        description: 'Ship ads in this bundle? (false = ads fully disabled)'
+        type: choice
+        options: ['false', 'true']
+        default: 'false'
+      test_ads:
+        description: 'Use Google test ad units? (set false only with real AdMob unit IDs)'
+        type: choice
+        options: ['true', 'false']
+        default: 'true'
+
+jobs:
+  build-release-aab:
+    name: Build release AAB
+    runs-on: ubuntu-latest
+    env:
+      # Push events have no inputs → ads-off bundle by default (matches the
+      # release-APK workflow; flip to 'true' from the Actions UI for ads).
+      ENABLE_ADS: ${{ github.event.inputs.enable_ads || 'false' }}
+      TEST_ADS: ${{ github.event.inputs.test_ads || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17 (temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (fail fast before Gradle)
+        run: flutter analyze --fatal-warnings
+
+      - name: Run the full test suite (no bundle from a red suite)
+        run: flutter test test/ --reporter compact
+
+      - name: Write release keystore from secrets (fail fast if missing)
+        env:
+          KS_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          missing=""
+          [ -z "$KS_BASE64" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "$KS_PASSWORD" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && missing="$missing ANDROID_KEY_ALIAS"
+          [ -z "$KEY_PASSWORD" ] && missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secret(s):$missing — a release AAB MUST be signed with the fixed release keystore, otherwise Play rejects it as debug-signed."
+            exit 1
+          fi
+          # android/.gitignore covers key.properties, *.keystore, *.jks.
+          printf '%s' "$KS_BASE64" | base64 -d > android/release.keystore
+          # Quoted heredoc: passwords containing $ or backticks stay verbatim.
+          cat > android/key.properties <<'PROPS'
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.keystore
+          PROPS
+          echo "Keystore decoded ($(stat -c%s android/release.keystore) bytes), alias=$KEY_ALIAS"
+
+      - name: Build release AAB
+        run: |
+          set -e
+          ARGS=(--release)
+          if [ "$ENABLE_ADS" = "false" ]; then
+            ARGS+=(--android-project-arg=enableAds=false)
+          fi
+          ARGS+=(--dart-define=ENABLE_ADS="$ENABLE_ADS" --dart-define=TEST_ADS="$TEST_ADS")
+          echo "flutter build appbundle ${ARGS[*]}"
+          flutter build appbundle "${ARGS[@]}"
+          ls -lh build/app/outputs/bundle/release/
+
+      - name: Verify AAB is RELEASE-signed (never debug-signed)
+        run: |
+          set -e
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          if [ ! -f "$AAB" ]; then
+            echo "::error::No AAB produced at $AAB"
+            exit 1
+          fi
+          echo "=== jarsigner ==="
+          jarsigner -verify -verbose -certs "$AAB" 2>&1 | tail -5
+          echo "=== signer certificate ==="
+          # `|| true`: an unsigned bundle must reach our own error message below
+          # (keytool exits non-zero and would otherwise abort the step silently).
+          CERT=$(keytool -printcert -jarfile "$AAB" 2>&1 || true)
+          echo "$CERT" | grep -E "Owner:|Valid from:|SHA256:" | head -6
+          if echo "$CERT" | grep -q "CN=Android Debug"; then
+            echo "::error::AAB is signed with the DEBUG keystore — Play would reject it with 'signed in debug mode'. Check android/key.properties."
+            exit 1
+          fi
+          if ! echo "$CERT" | grep -q "CN=ShiftEase"; then
+            echo "::error::AAB signer is not the ShiftEase release certificate — refusing to publish this artifact."
+            exit 1
+          fi
+          {
+            echo "### Release AAB signed ✅"
+            echo ""
+            echo '```'
+            echo "$CERT" | grep -E "Owner:|Valid from:|SHA256:"
+            echo '```'
+            echo ""
+            echo "Ads: enable_ads=$ENABLE_ADS, test_ads=$TEST_ADS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "OK: AAB signed with the ShiftEase release keystore"
+
+      - name: Verify ads are actually stripped from the AAB
+        if: env.ENABLE_ADS == 'false'
+        run: |
+          set -e
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          # base/manifest/AndroidManifest.xml inside the bundle is binary AXML;
+          # the publisher ID appears verbatim in its string pool when the
+          # Gradle placeholder was not blanked.
+          if unzip -p "$AAB" base/manifest/AndroidManifest.xml | strings | grep -q 'ca-app-pub-6917313063209470'; then
+            echo "::error::Ads-disabled bundle still ships the AdMob APPLICATION_ID — enableAds was not honoured"
+            exit 1
+          fi
+          echo "OK: no AdMob APPLICATION_ID in the merged manifest"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shiftease-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
