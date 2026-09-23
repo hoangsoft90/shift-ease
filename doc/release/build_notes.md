@@ -18,6 +18,12 @@
 - [x] Secrets trong CI: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
       `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (đã set trên repo;
       `key.properties` được workflow sinh ra trong runner, local vẫn gitignored)
+- [x] **Bản copy đã khôi phục về disk (2026-09-23):** `android/release.keystore`
+      (gitignored, mode 600) — lấy từ secrets qua workflow one-off
+      `recover-keystore.yml` (decrypt bằng passphrase trong secret riêng,
+      artifact đã xoá sau khi tải, secret recovery đã delete). Fingerprint
+      SHA-256 verify trùng khớp dòng trên. Build signed cục bộ vẫn cần tạo
+      `android/key.properties` tay với 4 giá trị từ secrets.
 - [x] CI có Flutter + JDK 17 (2 workflow release: APK + AAB)
 
 > ⚠️ **KHÔNG tạo lại keystore.** Đổi key = đổi upload key → Play từ chối mọi
